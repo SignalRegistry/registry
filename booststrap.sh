@@ -17,14 +17,19 @@ if [ "$1" == "dependencies" ]; then
   rm -rf deps
   mkdir deps
 
-  LOG_SUBSECTION "Mongoose - Embedded Web Server / Embedded Network Library"
-  LIBRARY="mongoose"
-  LIBRARY_OWNER="cesanta"
-  LIBRARY_VERSION="7.20"
+  LOG_SUBSECTION "libcurl - Embedded Web Server / Embedded Network Library"
+  LIBRARY="curl"
+  LIBRARY_OWNER="curl"
+  LIBRARY_VERSION="curl-8_18_0"
   LIBRARY_RELEASE_URL="https://github.com/${LIBRARY_OWNER}/${LIBRARY}/archive/refs/tags/${LIBRARY_VERSION}.tar.gz"
   curl -L ${LIBRARY_RELEASE_URL} --output deps/${LIBRARY}.tar.gz
-  tar -xf deps/${LIBRARY}.tar.gz --directory deps/ --verbose
-
+  tar -xf deps/${LIBRARY}.tar.gz --directory deps/
+  echo deps/${LIBRARY}-${LIBRARY_VERSION}/build
+  # cd 
+  # cmake -B build -DBUILD_STATIC_CURL=ON -DBUILD_SHARED_LIBS=OFF -DBUILD_LIBCURL_DOCS=OFF -DBUILD_CURL_EXE=OFF -DCURL_USE_LIBPSL=OFF
+  cmake -S deps/${LIBRARY}-${LIBRARY_VERSION}/ -B deps/${LIBRARY}-${LIBRARY_VERSION}/build -DBUILD_STATIC_CURL=ON -DBUILD_SHARED_LIBS=OFF -DBUILD_LIBCURL_DOCS=OFF -DBUILD_CURL_EXE=OFF -DCURL_USE_LIBPSL=OFF -DBUILD_MISC_DOCS=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF
+  cmake --build deps/${LIBRARY}-${LIBRARY_VERSION}/build --config Release
+  cmake --install deps/${LIBRARY}-${LIBRARY_VERSION}/build --prefix deps/${LIBRARY}-${LIBRARY_VERSION}/install
   # mv "dependencies/argtable-${ARGTABLE_VERSION}/" dependencies/argtable/
   # cd dependencies/argtable
   # cmake -B build -DBUILD_SHARED_LIBS=OFF -DARGTABLE3_ENABLE_TESTS=OFF -DARGTABLE3_ENABLE_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$LOCALAPPDATA"
@@ -32,6 +37,7 @@ if [ "$1" == "dependencies" ]; then
   # cmake --install build 
   # cd ../..
 
+  exit 0
 fi 
 
 if [ "$1" == "build" ]; then
