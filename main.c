@@ -28,10 +28,6 @@
 
 static const char *s_listen_on = "ws://localhost:8000";
 static const char *s_web_root = ".";
-static const char *s_ca_path = "ca.pem";
-static const char *s_cert_path = "cert.pem";
-static const char *s_key_path = "key.pem";
-struct mg_str s_ca, s_cert, s_key;
 
 // This RESTful server implements the following endpoints:
 //   /websocket - upgrade to Websocket, and implement websocket echo server
@@ -48,9 +44,18 @@ static void fn(struct mg_connection *c, int ev, void *ev_data)
       // Websocket connection, which will receive MG_EV_WS_MSG events.
       mg_ws_upgrade(c, hm, NULL);
     }
-    else if (mg_match(hm->uri, mg_str("/rest"), NULL))
+    else if (mg_match(hm->uri, mg_str("/source"), NULL))
     {
-      // Serve REST response
+      // source operations
+      printf("%.*s\n", hm->method.len, hm->method.buf);
+      if (mg_match(hm->method, mg_str("GET"), NULL))
+      {
+        MG_INFO(("GET"));  
+      }
+      else if (mg_match(hm->method, mg_str("POST"), NULL))
+      {
+        MG_INFO(("POST"));  
+      }
       mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
     }
     else
@@ -72,6 +77,8 @@ int main(int argc, char *argv[])
 {
   struct mg_mgr mgr; // Event manager
   int i;
+
+  mg_log_set(MG_LL_DEBUG); 
 
   mg_mgr_init(&mgr); // Initialise event manager
   printf("Starting WS listener on %s/websocket\n", s_listen_on);
