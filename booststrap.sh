@@ -17,6 +17,20 @@ if [ "$1" == "dependencies" ]; then
   rm -rf deps
   mkdir deps
 
+  LOG_SUBSECTION "SQLite3 - C-language library that implements a small, fast, self-contained, high-reliability, full-featured, SQL database engine"
+  LIBRARY="sqlite3"
+  LIBRARY_OWNER="SQLite"
+  LIBRARY_YEAR="2026"
+  LIBRARY_VERSION="3510200" # 3.51.2
+  LIBRARY_RELEASE_URL="https://sqlite.org/${LIBRARY_YEAR}/sqlite-amalgamation-${LIBRARY_VERSION}.zip"
+  echo ${LIBRARY_RELEASE_URL}
+  curl -L ${LIBRARY_RELEASE_URL} --output deps/${LIBRARY}.zip
+  unzip deps/sqlite3.zip -d deps
+  mv deps/sqlite-amalgamation-${LIBRARY_VERSION} deps/sqlite3
+  # tar -xf deps/${LIBRARY}.zip --directory deps/ --verbose
+
+  
+
   LOG_SUBSECTION "Mongoose - Embedded Web Server / Embedded Network Library"
   LIBRARY="mongoose"
   LIBRARY_OWNER="cesanta"
