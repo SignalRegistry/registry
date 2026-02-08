@@ -95,8 +95,7 @@ if [ "$1" == "build" ]; then
   echo ===========================================================================
   rm -rf build
   cmake -B build -DCMAKE_BUILD_TYPE=Release
-  cmake --build build
-
+  cmake --build build --config Release
 fi
 
 if [ "$1" == "install" ]; then
