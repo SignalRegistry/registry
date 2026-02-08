@@ -5,7 +5,6 @@ build/
 *.db
 lib
 include
-C__sqlite3
 
 # Prerequisites
 *.d

@@ -1,31 +1,12 @@
-// #include "mongoose.h"
-
-// // HTTP server event handler function
-// void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-//   if (ev == MG_EV_HTTP_MSG) {
-//     struct mg_http_message *hm = (struct mg_http_message *) ev_data;
-//     struct mg_http_serve_opts opts = { .root_dir = "./web_root/" };
-//     mg_http_serve_dir(c, hm, &opts);
-//   }
-// }
-
-// int main(void) {
-//   struct mg_mgr mgr;  // Declare event manager
-//   mg_mgr_init(&mgr);  // Initialise event manager
-//   mg_http_listen(&mgr, "http://0.0.0.0:8000", ev_handler, NULL);  // Setup listener
-//   for (;;) {          // Run an infinite event loop
-//     mg_mgr_poll(&mgr, 1000);
-//   }
-//   return 0;
-// }
-
-// Copyright (c) 2020 Cesanta Software Limited
-// All rights reserved
-//
-// Example Websocket server. See https://mongoose.ws/tutorials/websocket-server/
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
 
 #include "mongoose.h"
 #include "sqlite3.h"
+#include "jansson.h"
+
+#define SOURCE_ID_LEN 6
 
 static const char *s_listen_on = "ws://localhost:8000";
 static const char *s_web_root = ".";
@@ -36,6 +17,9 @@ static const char *s_web_root = ".";
 //   any other URI serves static files from s_web_root
 static void fn(struct mg_connection *c, int ev, void *ev_data)
 {
+  char *sqlite3_err = 0;
+  json_error_t *json_err = 0;
+
   sqlite3 *db = (struct sqlite3 *)c->mgr->userdata;
   if (ev == MG_EV_HTTP_MSG)
   {
@@ -53,33 +37,39 @@ static void fn(struct mg_connection *c, int ev, void *ev_data)
       printf("%.*s\n", hm->method.len, hm->method.buf);
       if (mg_match(hm->method, mg_str("GET"), NULL))
       {
-        MG_INFO(("GET"));
-        printf("%.*s\n", hm->query.len, hm->query.buf);
+        // MG_INFO(("GET"));
+        // printf("%.*s\n", hm->query.len, hm->query.buf);
       }
       else if (mg_match(hm->method, mg_str("POST"), NULL))
       {
         MG_INFO(("POST"));
-        printf("%.*s\n", hm->body.len, hm->body.buf);
-        struct mg_str key, val;
-        size_t ofs = 0;
-        while ((ofs = mg_json_next(hm->body, ofs, &key, &val)) > 0)
-        {
-          printf("%.*s -> %.*s\n", (int)key.len, key.buf, (int)val.len, val.buf);
-        }
+        json_t *body = json_loads(hm->body.buf, 0, json_err);
+        json_object_set(body, "status", json_string("active"));
+        char id[SOURCE_ID_LEN + 1] = {'\0'};
+        srand((int)time(NULL));
+        for (int i = 0; i < SOURCE_ID_LEN; i++)
+        id[i] = (i % 2 == 0) ? (rand() % 10) + '0' : (char)((int)('a') + rand() % ((int)('z') - (int)('a')));
+        id[SOURCE_ID_LEN] = '\0';
+        json_object_set_new(body, "id", json_string(id));
+        char *body_str = json_dumps(body, 0);
+        json_decref(body);
 
-        
-        char *err_msg = 0;
-        char *sql = "INSERT INTO sources(status,type,name,desc) VALUES('active','pulse','Button Press','Button press counter');";
-        int rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
+        char *sql = (char*)malloc((hm->body.len+250) * sizeof(char));
+
+        sprintf(sql, "INSERT INTO sources(data) VALUES('%s');", body_str);
+        printf("%s", sql);
+        int rc = sqlite3_exec(db, sql, 0, 0, &sqlite3_err);
         if (rc != SQLITE_OK)
         {
-          fprintf(stderr, "3-SQL error: %s\n", err_msg);
-          sqlite3_free(err_msg);
+          fprintf(stderr, "3-SQL error: %s\n", sqlite3_err);
+          sqlite3_free(sqlite3_err);
           sqlite3_close(db);
-          return 1;
+          mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\": 1, \"code\": \"ERROR_DATABASE_INSERT\"}");
         }
+        mg_http_reply(c, 200, "Content-Type: application/json\r\n", "{\"status\": 0, \"code\": \"SUCCESS\", \"id\": \"%s\"}\n", id);
+        free(sql);
+        free(body_str);
       }
-      mg_http_reply(c, 200, "", "{\"result\": %d}\n", 123);
     }
     else
     {
@@ -114,8 +104,9 @@ int main(int argc, char *argv[])
   }
 
   // Create table
-  char *sql1 = "DROP TABLE IF EXISTS Sources;"
-               "CREATE TABLE Sources(id INTEGER PRIMARY KEY, datetime NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')), status TEXT, type TEXT, name TEXT, desc TEXT);";
+  char *sql1 = "DROP TABLE IF EXISTS Sourcess;"
+               "CREATE TABLE IF NOT EXISTS Sources(id INTEGER PRIMARY KEY, datetime NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')), data TEXT);";
+  //  "CREATE TABLE Sources(id INTEGER PRIMARY KEY, datetime NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')), status TEXT, type TEXT, name TEXT, desc TEXT);";
 
   // datetime alternative
   // 'dt1' DATETIME NOT NULL DEFAULT (datetime(CURRENT_TIMESTAMP, 'localtime')),

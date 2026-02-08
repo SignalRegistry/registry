@@ -66,7 +66,7 @@ if [ "$1" == "dependencies" ]; then
     gcc -c -o deps/${LIBRARY}/${LIBRARY}.o deps/${LIBRARY}/${LIBRARY}.c
     ar rcs -o lib/lib${LIBRARY}.a deps/${LIBRARY}/${LIBRARY}.o
   else
-    echo "[ERROR] Unsupported operating system"
+    LOG ERROR Unsupported operating system
     exit 1
   fi
   cp deps/${LIBRARY}/${LIBRARY}.h include/ 
@@ -85,14 +85,6 @@ if [ "$1" == "dependencies" ]; then
   cmake --build deps/${LIBRARY}-${LIBRARY_VERSION}/build --config Release > /dev/null 2>&1
   cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/include/* include/
   cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/lib/* lib/
-
-
-  # mv "dependencies/argtable-${ARGTABLE_VERSION}/" dependencies/argtable/
-  # cd dependencies/argtable
-  # cmake -B build -DBUILD_SHARED_LIBS=OFF -DARGTABLE3_ENABLE_TESTS=OFF -DARGTABLE3_ENABLE_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX="$LOCALAPPDATA"
-  # cmake --build build --config Release
-  # cmake --install build 
-  # cd ../..
 
 fi 
 

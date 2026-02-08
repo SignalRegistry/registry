@@ -5,9 +5,10 @@ GET http://localhost:8000/source?query=any HTTP/1.1
 ###
 
 POST http://localhost:8000/source HTTP/1.1
-content-type: application/json
+d
 
 {
-    "name": "sample",
-    "time": "Wed, 21 Oct 2015 18:27:50 GMT"
+    "type": "pulse",
+    "name": "Example Source",
+    "desc": "Example pulse source for testing"
 }
