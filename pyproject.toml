@@ -1,0 +1,98 @@
+# This project was generated with 0.3.26 using template: https://github.com/beeware/briefcase-template @ v0.3.26
+[tool.briefcase]
+project_name = "Registry API"
+bundle = "com.sinyatek.signalregistry.registry.api"
+version = "0.0.1"
+url = "https://api.registry.signalregistry.sinyatek.com/registry-api"
+license.file = "LICENSE"
+author = "Hüseyin YİĞİT"
+author_email = "iletisim@sinyatek.com"
+
+[tool.briefcase.app.registry-api]
+formal_name = "Registry API"
+description = "Registry API"
+long_description = """More details about the app should go here.
+"""
+sources = [
+    "src/registry_api",
+]
+test_sources = [
+    "tests",
+]
+console_app = true
+
+requires = [
+    # Add your cross-platform app requirements here
+]
+test_requires = [
+    "pytest",
+]
+
+[tool.briefcase.app.registry-api.macOS]
+universal_build = true
+requires = [
+    # Add your macOS-specific app requirements here
+]
+
+[tool.briefcase.app.registry-api.linux]
+requires = [
+    # Add your Linux-specific app requirements here
+]
+
+[tool.briefcase.app.registry-api.linux.system.debian]
+system_requires = [
+    # Add any system packages needed at build the app here
+]
+
+system_runtime_requires = [
+    # Add any system packages needed at runtime here
+]
+
+[tool.briefcase.app.registry-api.linux.system.rhel]
+system_requires = [
+    # Add any system packages needed at build the app here
+]
+
+system_runtime_requires = [
+    # Add any system packages needed at runtime here
+]
+
+[tool.briefcase.app.registry-api.linux.system.suse]
+system_requires = [
+    # Add any system packages needed at build the app here
+]
+
+system_runtime_requires = [
+    # Add any system packages needed at runtime here
+]
+
+[tool.briefcase.app.registry-api.linux.system.arch]
+system_requires = [
+    # Add any system packages needed at build the app here
+]
+
+system_runtime_requires = [
+    # Add any system packages needed at runtime here
+]
+
+[tool.briefcase.app.registry-api.linux.flatpak]
+flatpak_runtime = "org.freedesktop.Platform"
+flatpak_runtime_version = "25.08"
+flatpak_sdk = "org.freedesktop.Sdk"
+
+[tool.briefcase.app.registry-api.windows]
+requires = [
+    # Add your Windows-specific app requirements here
+]
+
+# Mobile deployments
+[tool.briefcase.app.registry-api.iOS]
+supported = false
+
+[tool.briefcase.app.registry-api.android]
+supported = false
+
+# Web deployments
+[tool.briefcase.app.registry-api.web]
+supported = false
+

@@ -1,63 +1,68 @@
 # Custom
-deps/
-build/
-.vscode/
-*.db
-lib
-include
+Python*
 
-# Prerequisites
-*.d
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# OSX useful to ignore
+*.DS_Store
+.AppleDouble
+.LSOverride
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# Thumbnails
+._*
 
-# Precompiled Headers
-*.gch
-*.pch
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# Shared objects (inc. Windows DLLs)
-*.dll
+# C extensions
 *.so
-*.so.*
-*.dylib
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.dist-info/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# IntelliJ Idea family of suites
+.idea
+*.iml
+## File-based project format:
+*.ipr
+*.iws
+## mpeltonen/sbt-idea plugin
+.idea_modules/
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Briefcase log files
+logs/
 
-# debug information files
-*.dwo
+# Briefcase local configuratoin
+.briefcase/
