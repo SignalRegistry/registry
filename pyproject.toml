@@ -1,11 +1,11 @@
-# This project was generated with 0.3.26 using template: https://github.com/beeware/briefcase-template @ v0.3.26
+# This project was generated with 0.3.22 using template: https://github.com/beeware/briefcase-template@v0.3.22
 [tool.briefcase]
 project_name = "Registry API"
 bundle = "com.sinyatek.signalregistry.registry.api"
 version = "0.0.1"
-url = "https://api.registry.signalregistry.sinyatek.com/registry-api"
+url = "https://signalregistry.net"
 license.file = "LICENSE"
-author = "Hüseyin YİĞİT"
+author = "Sinyatek LTD."
 author_email = "iletisim@sinyatek.com"
 
 [tool.briefcase.app.registry-api]
@@ -77,7 +77,7 @@ system_runtime_requires = [
 
 [tool.briefcase.app.registry-api.linux.flatpak]
 flatpak_runtime = "org.freedesktop.Platform"
-flatpak_runtime_version = "25.08"
+flatpak_runtime_version = "24.08"
 flatpak_sdk = "org.freedesktop.Sdk"
 
 [tool.briefcase.app.registry-api.windows]

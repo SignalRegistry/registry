@@ -1,5 +1,5 @@
-# Custom
-Python*
+.briefcase
+*.pem
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -63,6 +63,3 @@ var/
 
 # Briefcase log files
 logs/
-
-# Briefcase local configuratoin
-.briefcase/
