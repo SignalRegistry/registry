@@ -2,8 +2,11 @@
 Registry API
 """
 
-from quart import Quart, g, websocket, request
+from quart import Quart, g, websocket, request, jsonify
 import aiosqlite
+import sys
+import json
+from hashlib import blake2b, blake2s
 
 app = Quart(__name__)
 
@@ -61,15 +64,72 @@ async def startup():
 # ------------------------------------------------------------------------------
 # Routes
 # ------------------------------------------------------------------------------
+@app.route("/default", methods=["GET"])
+async def default():
+    headers = {}
+    # for header in request.headers:
+    headers = {}
+    for key, value in request.headers:
+        headers[key] = value
+    args = request.args.to_dict()
+    data = (await request.get_data()).decode(encoding="utf-8")
+    form = await request.form
+    body = await request.get_json()
+    cookies = request.cookies.to_dict()
+    return {
+        "success": 1,
+        "data": {
+            "url": request.url,
+            "base_url": request.base_url,
+            "headers": headers,
+            "args": args,
+            "data": data,
+            "form": form,
+            "body": body,
+            "cookies": cookies,
+        },
+    }
+
+
 @app.route("/sources", methods=["GET", "POST"])
 async def sources():
     db = await get_db()
+    db.row_factory = aiosqlite.Row
     if request.method == "GET":
         cursor = await db.execute("SELECT id, data FROM sources")
-        data = await cursor.fetchall()
-        return {"success": 1, "data": data}
+        rows = await cursor.fetchall()
+
+        result = [dict(row) for row in rows]  # her satır dict olur
+        return jsonify({"success": 1, "data": result}), 200
+    elif request.method == "POST":
+        body = await request.get_json()
+        # print(body)
+        # return {"success": 1}, 201
+        if not all(k in body for k in ("name", "type")):
+            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        if sys.maxsize > 2**32:  # 64bit
+            h = blake2b(digest_size=3)
+        else:
+            h = blake2s(digest_size=3)
+        h.update(f"{body["name"]}".encode("utf-8"))
+        id = h.hexdigest()
+        try:
+            await db.execute(
+                "INSERT INTO sources(id, data) VALUES(?,?)",
+                (id, json.dumps(body, ensure_ascii="False")),
+            )
+            await db.commit()
+
+            return (
+                jsonify({"success": 1, "id": f"{id}"}),
+                201,
+                {"Location": f"{request.base_url}/source/{id}"},
+            )
+        except Exception:
+            await db.rollback()
+            return {"success": 0}, 400
     else:
-        return {"success": 1, "data": []}
+        return {"success": 0}, 400
 
 
 @app.route("/")

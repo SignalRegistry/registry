@@ -3,7 +3,6 @@
 ## Development Platform
 - Pardus 25
 
-
 ## Requirements
 - Python 3.13
 
@@ -15,9 +14,9 @@ birefcase new                           # create project
 
 ## Building
 ``` bash
-python -m venv .venv          # create vitual environment
-source ./.venv/bin/activate   # activate virtual environment
-pip install -r requirements   # install dependencies
+python -m venv .venv            # create vitual environment
+source ./.venv/bin/activate     # activate virtual environment 
+pip install -r requirements.txt # install dependencies
 ```
 
 ## Development

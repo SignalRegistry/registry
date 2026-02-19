@@ -1,6 +1,7 @@
 .briefcase
 *.pem
 *.sql*
+*mkcert*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
