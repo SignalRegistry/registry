@@ -61,6 +61,12 @@ async def startup():
     await init_db()
 
 
+common_headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "*",
+}
+
+
 # ------------------------------------------------------------------------------
 # Routes
 # ------------------------------------------------------------------------------
@@ -76,19 +82,23 @@ async def default():
     form = await request.form
     body = await request.get_json()
     cookies = request.cookies.to_dict()
-    return {
-        "success": 1,
-        "data": {
-            "url": request.url,
-            "base_url": request.base_url,
-            "headers": headers,
-            "args": args,
-            "data": data,
-            "form": form,
-            "body": body,
-            "cookies": cookies,
+    return (
+        {
+            "success": 1,
+            "data": {
+                "url": request.url,
+                "base_url": request.base_url,
+                "headers": headers,
+                "args": args,
+                "data": data,
+                "form": form,
+                "body": body,
+                "cookies": cookies,
+            },
         },
-    }
+        200,
+        common_headers,
+    )
 
 
 @app.route("/sources", methods=["GET", "POST"])
@@ -100,7 +110,7 @@ async def sources():
         rows = await cursor.fetchall()
 
         result = [dict(row) for row in rows]  # her satır dict olur
-        return jsonify({"success": 1, "data": result}), 200
+        return jsonify({"success": 1, "data": result}), 200, common_headers
     elif request.method == "POST":
         body = await request.get_json()
         # print(body)
@@ -120,11 +130,9 @@ async def sources():
             )
             await db.commit()
 
-            return (
-                jsonify({"success": 1, "id": f"{id}"}),
-                201,
-                {"Location": f"{request.base_url}/source/{id}"},
-            )
+            res_headers = common_headers
+            res_headers["Location"] = f"{request.base_url}/source/{id}"
+            return (jsonify({"success": 1, "id": f"{id}"}), 201, res_headers)
         except Exception:
             await db.rollback()
             return {"success": 0}, 400
