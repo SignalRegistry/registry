@@ -6,7 +6,7 @@ from quart import Quart, g, websocket, request, jsonify
 import aiosqlite
 import sys
 import json
-from hashlib import blake2b, blake2s
+import secrets
 
 app = Quart(__name__)
 
@@ -47,8 +47,9 @@ async def init_db():
             """
             CREATE TABLE IF NOT EXISTS sources (
                 no INTEGER PRIMARY KEY, 
+                active INTEGER NOT NULL DEFAULT 1,
                 date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                id TEXT NOT NULL, 
+                id TEXT UNIQUE NOT NULL, 
                 data TEXT NOT NULL
             )
             """
@@ -59,8 +60,9 @@ async def init_db():
             """
             CREATE TABLE IF NOT EXISTS flows (
                 no INTEGER PRIMARY KEY, 
+                active INTEGER NOT NULL DEFAULT 1,
                 date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                id TEXT NOT NULL, 
+                id TEXT UNIQUE NOT NULL, 
                 data TEXT NOT NULL
             )
             """
@@ -113,15 +115,14 @@ async def default():
     )
 
 
-@app.route("/sources", methods=["GET", "POST", "OPTIONS"])
+@app.route("/sources", methods=["GET", "POST", "DELETE", "PUT", "OPTIONS"])
 async def sources():
     db = await get_db()
     db.row_factory = aiosqlite.Row
     if request.method == "GET":
-        cursor = await db.execute("SELECT id, date, data FROM sources")
+        cursor = await db.execute("SELECT id, date, data FROM sources where active = 1")
         rows = await cursor.fetchall()
 
-        # result = [dict(row) for row in rows]  # her satır dict olur
         result = []
         for row in rows:
             d = dict(row)
@@ -131,21 +132,13 @@ async def sources():
                 except:
                     pass
             result.append(d)
-        print(result)
 
         return jsonify({"success": 1, "data": result}), 200, common_headers
     elif request.method == "POST":
         body = await request.get_json()
-        # print(body)
-        # return {"success": 1}, 201
         if not all(k in body for k in ("name", "type")):
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        if sys.maxsize > 2**32:  # 64bit
-            h = blake2b(digest_size=3)
-        else:
-            h = blake2s(digest_size=3)
-        h.update(f"{body["name"]}".encode("utf-8"))
-        id = h.hexdigest()
+        id = secrets.token_hex(3)
         try:
             await db.execute(
                 "INSERT INTO sources(id, data) VALUES(?,?)",
@@ -163,15 +156,16 @@ async def sources():
         return (jsonify({"success": 0}), 200, common_headers)
 
 
-@app.route("/source", methods=["GET", "POST", "OPTIONS"])
-async def source():
+@app.route("/source/<string:source_id>", methods=["GET", "PUT", "DELETE", "OPTIONS"])
+async def source(source_id):
     db = await get_db()
     db.row_factory = aiosqlite.Row
     if request.method == "GET":
-        cursor = await db.execute("SELECT id, date, data FROM sources")
-        rows = await cursor.fetchall()
+        cursor = await db.execute(
+            "SELECT id, date, data FROM sources WHERE id = ?", (source_id,)
+        )
+        rows = [await cursor.fetchone()]
 
-        # result = [dict(row) for row in rows]  # her satır dict olur
         result = []
         for row in rows:
             d = dict(row)
@@ -181,32 +175,27 @@ async def source():
                 except:
                     pass
             result.append(d)
-        print(result)
-
         return jsonify({"success": 1, "data": result}), 200, common_headers
-    elif request.method == "POST":
-        body = await request.get_json()
-        # print(body)
-        # return {"success": 1}, 201
-        if not all(k in body for k in ("name", "type")):
-            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        if sys.maxsize > 2**32:  # 64bit
-            h = blake2b(digest_size=3)
-        else:
-            h = blake2s(digest_size=3)
-        h.update(f"{body["name"]}".encode("utf-8"))
-        id = h.hexdigest()
+    elif request.method == "DELETE":
         try:
-            await db.execute(
-                "INSERT INTO sources(id, data) VALUES(?,?)",
-                (id, json.dumps(body, ensure_ascii="False")),
+            # cursor = await db.execute(
+            #     "DELETE FROM sources WHERE id = ?",
+            #     (source_id,),
+            # )
+            # await db.commit()
+            cursor = await db.execute(
+                "UPDATE sources SET active = 0 WHERE id = ?", (source_id,)
             )
             await db.commit()
 
             res_headers = common_headers
-            res_headers["Location"] = f"{request.base_url}/source/{id}"
-            return (jsonify({"success": 1, "id": f"{id}"}), 201, res_headers)
-        except Exception:
+            return (
+                jsonify({"success": 1, "count": f"{cursor.rowcount}"}),
+                200,
+                res_headers,
+            )
+        except Exception as e:
+            print(str(e))
             await db.rollback()
             return {"success": 0}, 400, common_headers
     else:
@@ -218,10 +207,18 @@ async def flows():
     db = await get_db()
     db.row_factory = aiosqlite.Row
     if request.method == "GET":
-        cursor = await db.execute("SELECT id, date, data FROM flows")
-        rows = await cursor.fetchall()
+        args = request.args.to_dict()
 
-        # result = [dict(row) for row in rows]  # her satır dict olur
+        print(request.args.to_dict())
+        if "last_only" in args and args["last_only"] == "1":
+            cursor = await db.execute(
+                "SELECT id, date, data FROM flows where active = 1"
+            )
+            rows = [await cursor.fetchone()]
+        else:
+            cursor = await db.execute("SELECT id, date, data FROM flows")
+            rows = await cursor.fetchall()
+
         result = []
         for row in rows:
             d = dict(row)
@@ -231,22 +228,17 @@ async def flows():
                 except:
                     pass
             result.append(d)
-        print(result)
 
         return jsonify({"success": 1, "data": result}), 200, common_headers
     elif request.method == "POST":
         body = await request.get_json()
-        # print(body)
-        # return {"success": 1}, 201
-        if not all(k in body for k in ("name", "type")):
-            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        if sys.maxsize > 2**32:  # 64bit
-            h = blake2b(digest_size=3)
-        else:
-            h = blake2s(digest_size=3)
-        h.update(f"{body["name"]}".encode("utf-8"))
-        id = h.hexdigest()
+        # if not all(k in body for k in ("name", "type")):
+        #     return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        id = secrets.token_hex(3)
         try:
+            cursor = await db.execute("UPDATE flows SET active = 0")
+            await db.commit()
+
             await db.execute(
                 "INSERT INTO flows(id, data) VALUES(?,?)",
                 (id, json.dumps(body, ensure_ascii="False")),
