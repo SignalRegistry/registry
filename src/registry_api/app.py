@@ -177,6 +177,31 @@ async def source(source_id):
                     pass
             result.append(d)
         return jsonify({"success": 1, "data": result}), 200, common_headers
+    elif request.method == "PUT":
+        body = await request.get_json()
+        cursor = await db.execute(
+            "SELECT data FROM sources WHERE id = ?", (source_id,)
+        )
+        row = dict(await cursor.fetchone())
+        row["data"] = json.loads(row["data"])
+        for key in body.keys():
+            row["data"][key] = body[key]
+        try:
+            cursor = await db.execute(
+                "UPDATE sources SET data = ? WHERE id = ?", (json.dumps(row["data"], ensure_ascii=False), source_id,)
+            )
+            await db.commit()
+
+            res_headers = common_headers
+            return (
+                jsonify({"success": 1, "count": f"{cursor.rowcount}"}),
+                200,
+                res_headers,
+            )
+        except Exception as e:
+            print(str(e))
+            await db.rollback()
+            return {"success": 0}, 400, common_headers
     elif request.method == "DELETE":
         try:
             cursor = await db.execute(

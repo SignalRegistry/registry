@@ -9,11 +9,22 @@ def test_source_delete():
     print(json.dumps(res.json(), indent=4, ensure_ascii=False))
     assert res.status_code == 200
 
-def test_source_get():
+
+def test_source_put():
     """An initial test for the app."""
-    res = requests.get("https://127.0.0.1:5000/source/d03cb3", verify=False)
+    res = requests.put(
+        "https://127.0.0.1:5000/source/5307d3",
+        json={"name": "Source 1", "type": "Pulse", "description": "deneme5"},
+        verify=False,
+    )
     print("")
     print(json.dumps(res.json(), indent=4, ensure_ascii=False))
     assert res.status_code == 200
 
 
+def test_source_get():
+    """An initial test for the app."""
+    res = requests.get("https://127.0.0.1:5000/source/5307d3", verify=False)
+    print("")
+    print(json.dumps(res.json(), indent=4, ensure_ascii=False))
+    assert res.status_code == 200
