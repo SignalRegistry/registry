@@ -78,6 +78,7 @@ async def startup():
 common_headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
 }
 
 
@@ -115,7 +116,7 @@ async def default():
     )
 
 
-@app.route("/sources", methods=["GET", "POST", "DELETE", "PUT", "OPTIONS"])
+@app.route("/sources", methods=["GET", "POST", "OPTIONS"])
 async def sources():
     db = await get_db()
     db.row_factory = aiosqlite.Row
@@ -178,11 +179,6 @@ async def source(source_id):
         return jsonify({"success": 1, "data": result}), 200, common_headers
     elif request.method == "DELETE":
         try:
-            # cursor = await db.execute(
-            #     "DELETE FROM sources WHERE id = ?",
-            #     (source_id,),
-            # )
-            # await db.commit()
             cursor = await db.execute(
                 "UPDATE sources SET active = 0 WHERE id = ?", (source_id,)
             )
