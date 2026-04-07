@@ -22,7 +22,7 @@ app.config["DEBUG"] = True
 # ------------------------------------------------------------------------------
 async def get_db():
     if "db" not in g:
-        g.db = await aiosqlite.connect(f"{os.environ.get("HOST")}.db")
+        g.db = await aiosqlite.connect(f"{os.environ.get("DATABASE")}")
         g.db.row_factory = aiosqlite.Row
 
         # WAL mode for better concurrency
@@ -42,7 +42,7 @@ async def close_db(exception):
 # Database Initialization
 # ------------------------------------------------------------------------------
 async def init_db():
-    async with aiosqlite.connect(f"{os.environ.get("HOST")}.db") as db:
+    async with aiosqlite.connect(f"{os.environ.get("DATABASE")}") as db:
         await db.execute("PRAGMA journal_mode=WAL;")
 
         await db.execute(
@@ -288,13 +288,6 @@ async def ws():
 
 
 def main():
-
-    app.run(port=int(os.environ["PORT"]), debug=True)
-    # Your app logic goes here
-    # print("Hello, World.")
-
-
-if __name__ == "__main__":
     DATA_FOLDER = os.environ.get("DATA_FOLDER")
     if not DATA_FOLDER:
         raise RuntimeError("'DATA_FOLDER' must be set as environment variable.")
@@ -310,5 +303,14 @@ if __name__ == "__main__":
         print(str(e))
         exit()
     os.environ["HOST"] = args.host[0]
+    os.environ["DATABASE"] = os.path.join(DATA_FOLDER, f"{os.environ.get('HOST')}.db")
     os.environ["PORT"] = args.port[0]
+
+    app.run(port=int(os.environ["PORT"]), debug=True)
+    # Your app logic goes here
+    # print("Hello, World.")
+
+
+if __name__ == "__main__":
+
     main()
