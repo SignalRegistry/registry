@@ -5,13 +5,15 @@ Registry API
 from quart import Quart, g, websocket, request, jsonify
 import aiosqlite
 import sys
+import os
 import json
 import secrets
+import argparse
 
 app = Quart(__name__)
 
 app = Quart(__name__)
-app.config["DATABASE"] = "database.sql"
+app.config["DATABASE"] = f"{os.environ.get("HOST")}.db"
 app.config["DEBUG"] = True
 
 
@@ -20,7 +22,7 @@ app.config["DEBUG"] = True
 # ------------------------------------------------------------------------------
 async def get_db():
     if "db" not in g:
-        g.db = await aiosqlite.connect(app.config["DATABASE"])
+        g.db = await aiosqlite.connect(f"{os.environ.get("HOST")}.db")
         g.db.row_factory = aiosqlite.Row
 
         # WAL mode for better concurrency
@@ -40,7 +42,7 @@ async def close_db(exception):
 # Database Initialization
 # ------------------------------------------------------------------------------
 async def init_db():
-    async with aiosqlite.connect(app.config["DATABASE"]) as db:
+    async with aiosqlite.connect(f"{os.environ.get("HOST")}.db") as db:
         await db.execute("PRAGMA journal_mode=WAL;")
 
         await db.execute(
@@ -78,7 +80,7 @@ async def startup():
 common_headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 }
 
 
@@ -179,16 +181,18 @@ async def source(source_id):
         return jsonify({"success": 1, "data": result}), 200, common_headers
     elif request.method == "PUT":
         body = await request.get_json()
-        cursor = await db.execute(
-            "SELECT data FROM sources WHERE id = ?", (source_id,)
-        )
+        cursor = await db.execute("SELECT data FROM sources WHERE id = ?", (source_id,))
         row = dict(await cursor.fetchone())
         row["data"] = json.loads(row["data"])
         for key in body.keys():
             row["data"][key] = body[key]
         try:
             cursor = await db.execute(
-                "UPDATE sources SET data = ? WHERE id = ?", (json.dumps(row["data"], ensure_ascii=False), source_id,)
+                "UPDATE sources SET data = ? WHERE id = ?",
+                (
+                    json.dumps(row["data"], ensure_ascii=False),
+                    source_id,
+                ),
             )
             await db.commit()
 
@@ -284,10 +288,27 @@ async def ws():
 
 
 def main():
-    app.run()
+
+    app.run(port=int(os.environ["PORT"]), debug=True)
     # Your app logic goes here
     # print("Hello, World.")
 
 
 if __name__ == "__main__":
+    DATA_FOLDER = os.environ.get("DATA_FOLDER")
+    if not DATA_FOLDER:
+        raise RuntimeError("'DATA_FOLDER' must be set as environment variable.")
+    parser = argparse.ArgumentParser(
+        prog="registry-api", description="Registry API for storing sources and flows"
+    )
+    parser.add_argument("--host", help="hostname for database", type=str, nargs=1, required=True)
+    parser.add_argument("--port", help="listening port", type=str, nargs=1, required=True)
+    try:
+        args = parser.parse_args(sys.argv[1:])
+    except Exception as e:
+        print(parser.format_help())
+        print(str(e))
+        exit()
+    os.environ["HOST"] = args.host[0]
+    os.environ["PORT"] = args.port[0]
     main()

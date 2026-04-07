@@ -1,6 +1,7 @@
 .briefcase
 *.pem
 *.sql*
+*.db
 *mkcert*
 
 # Byte-compiled / optimized / DLL files
@@ -65,3 +66,4 @@ var/
 
 # Briefcase log files
 logs/
+.pdm-python

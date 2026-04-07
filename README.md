@@ -8,15 +8,19 @@
 
 ## Initialization (One-Time Setup)
 ```bash
-sudo apt install python3-briefcase      # system-wide briefcase
-birefcase new                           # create project
+sudo apt install python3-pdm  # system-wide briefcase
+pdm init                      # create project
+pdm add <package>             # add dependencies  
 ```
 
-## Building
+## Building first time
 ``` bash
-python -m venv .venv            # create vitual environment
-source ./.venv/bin/activate     # activate virtual environment 
-pip install -r requirements.txt # install dependencies
+pdm config python.use_venv true
+pdm venv create
+pdm use .venv/bin/python
+source .venv/bin/activate
+pdm install
+briefcase convert
 ```
 
 ## Development
