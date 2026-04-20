@@ -9,13 +9,12 @@ import os
 import json
 import secrets
 import argparse
-
-app = Quart(__name__)
+import logging
+from logging.handlers import RotatingFileHandler
 
 app = Quart(__name__)
 app.config["DATABASE"] = f"{os.environ.get("HOST")}.db"
 app.config["DEBUG"] = True
-
 
 # ------------------------------------------------------------------------------
 # Database Helpers
@@ -43,6 +42,7 @@ async def close_db(exception):
 # ------------------------------------------------------------------------------
 async def init_db():
     async with aiosqlite.connect(f"{os.environ.get("DATABASE")}") as db:
+        db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA journal_mode=WAL;")
 
         await db.execute(
@@ -70,6 +70,25 @@ async def init_db():
             """
         )
         await db.commit()
+
+        # create source tables
+        logging.info("- Creating source tables ...")
+        cursor = await db.execute("SELECT id FROM sources;")
+        rows = await cursor.fetchall()
+        for row in rows:
+            source = dict(row)
+            logging.info(f"  -- {source['id']}")
+            await db.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS "source-{source['id']}" (
+                    no INTEGER PRIMARY KEY, 
+                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    id TEXT UNIQUE NOT NULL, 
+                    data TEXT NOT NULL
+                )
+                """
+            )
+            await db.commit()
 
 
 @app.before_serving
@@ -159,7 +178,7 @@ async def sources():
         return (jsonify({"success": 0}), 200, common_headers)
 
 
-@app.route("/source/<string:source_id>", methods=["GET", "PUT", "DELETE", "OPTIONS"])
+@app.route("/source/<string:source_id>", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def source(source_id):
     db = await get_db()
     db.row_factory = aiosqlite.Row
@@ -204,6 +223,22 @@ async def source(source_id):
             )
         except Exception as e:
             print(str(e))
+            await db.rollback()
+            return {"success": 0}, 400, common_headers
+    elif request.method == "POST":
+        body = await request.get_json()
+        if not all(k in body for k in ("name", "type")):
+            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        data_id = secrets.token_hex(3)
+        try:
+            await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?)', (data_id, json.dumps(body, ensure_ascii="False")),)
+            await db.commit()
+            
+            res_headers = common_headers
+            res_headers["Location"] = f"{request.base_url}/source/{source_id}/{data_id}"
+            return (jsonify({"success": 1, "id": f"{data_id}"}), 201, res_headers)
+        except Exception as e:
+            logging.error(f"  -- {str(e)}")
             await db.rollback()
             return {"success": 0}, 400, common_headers
     elif request.method == "DELETE":
@@ -291,6 +326,7 @@ def main():
     DATA_FOLDER = os.environ.get("DATA_FOLDER")
     if not DATA_FOLDER:
         raise RuntimeError("'DATA_FOLDER' must be set as environment variable.")
+    
     parser = argparse.ArgumentParser(
         prog="registry-api", description="Registry API for storing sources and flows"
     )
@@ -306,6 +342,15 @@ def main():
     os.environ["DATABASE"] = os.path.join(DATA_FOLDER, f"{os.environ.get('HOST')}.db")
     os.environ["PORT"] = args.port[0]
 
+    log_hndl_cnsl = logging.StreamHandler(sys.stdout)
+    log_hndl_rota = RotatingFileHandler(filename=os.environ.get("DATABASE").replace(".db",".log"), maxBytes=1024*1024, backupCount=3)
+    logging.basicConfig(
+        encoding='utf-8', format='%(asctime)s %(levelname)s: %(message)s', 
+        level=logging.INFO,
+        handlers= [log_hndl_cnsl, log_hndl_rota]          
+    )
+    
+    
     app.run(port=int(os.environ["PORT"]), debug=True)
     # Your app logic goes here
     # print("Hello, World.")
