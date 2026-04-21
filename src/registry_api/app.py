@@ -194,7 +194,8 @@ async def source(source_id):
             if isinstance(d.get("data"), str):
                 try:
                     d["data"] = json.loads(d["data"])
-                except:
+                except Exception as e:
+                    logging.error(f"  -- {str(e)}")
                     pass
             result.append(d)
         return jsonify({"success": 1, "data": result}), 200, common_headers
@@ -206,32 +207,22 @@ async def source(source_id):
         for key in body.keys():
             row["data"][key] = body[key]
         try:
-            cursor = await db.execute(
-                "UPDATE sources SET data = ? WHERE id = ?",
-                (
-                    json.dumps(row["data"], ensure_ascii=False),
-                    source_id,
-                ),
-            )
+            cursor = await db.execute("UPDATE sources SET data = ? WHERE id = ?", (json.dumps(row["data"], ensure_ascii=False), source_id,),)
             await db.commit()
 
             res_headers = common_headers
-            return (
-                jsonify({"success": 1, "count": f"{cursor.rowcount}"}),
-                200,
-                res_headers,
-            )
+            return (jsonify({"success": 1, "count": f"{cursor.rowcount}"}), 200, res_headers,)
         except Exception as e:
             print(str(e))
             await db.rollback()
             return {"success": 0}, 400, common_headers
     elif request.method == "POST":
-        body = await request.get_json()
-        if not all(k in body for k in ("name", "type")):
+        body = await request.get_json() 
+        if not all(k in body for k in ("value",)):
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         data_id = secrets.token_hex(3)
         try:
-            await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?)', (data_id, json.dumps(body, ensure_ascii="False")),)
+            await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)', (data_id, json.dumps(body, ensure_ascii="False")),)
             await db.commit()
             
             res_headers = common_headers
