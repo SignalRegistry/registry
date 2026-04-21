@@ -4,7 +4,7 @@ distribution = false
 
 [project]
 name = "registry-api"
-version = "0.1.0"
+version = "0.1.1"
 description = "Default template for PDM package"
 authors = [
     {name = "Hüseyin YİĞİT", email = "yigit.hsyn@gmail.com"},
@@ -22,7 +22,7 @@ license = {text = "MIT"}
 [tool.briefcase]
 project_name = "Registry Api"
 bundle = "com.example"
-version = "0.0.1"
+version = "0.0.2"
 url = "https://example.com/registry-api"
 license.file = "LICENSE"
 author = "Hüseyin YİĞİT"

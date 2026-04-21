@@ -11,6 +11,7 @@ import secrets
 import argparse
 import logging
 from logging.handlers import RotatingFileHandler
+import asyncio
 
 app = Quart(__name__)
 app.config["DATABASE"] = f"{os.environ.get("HOST")}.db"
@@ -218,7 +219,9 @@ async def source(source_id):
             return {"success": 0}, 400, common_headers
     elif request.method == "POST":
         body = await request.get_json() 
-        if not all(k in body for k in ("value",)):
+        if not all(k in body for k in ("data",)):
+            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        if not all(k in body["data"] for k in ("value",)):
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         data_id = secrets.token_hex(3)
         try:
@@ -305,12 +308,23 @@ async def flows():
     else:
         return (jsonify({"success": 0}), 200, common_headers)
 
+async def ws_send():
+    while True:
+        await websocket.send()
+
+async def ws_recv():
+    while True:
+        data = await websocket.receive()
 
 @app.websocket("/websocket")
 async def ws():
     while True:
         data = await websocket.receive()
         await websocket.send(data)
+
+        # send = asyncio.create_task(ws_send())
+        # recv = asyncio.create_task(ws_recv())
+        # await asyncio.gather(send, recv)
 
 
 def main():
