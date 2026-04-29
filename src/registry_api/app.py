@@ -17,6 +17,8 @@ app = Quart(__name__)
 app.config["DATABASE"] = f"{os.environ.get("HOST")}.db"
 app.config["DEBUG"] = True
 
+ws_clnt = set()
+
 # ------------------------------------------------------------------------------
 # Database Helpers
 # ------------------------------------------------------------------------------
@@ -230,6 +232,7 @@ async def source(source_id):
             
             res_headers = common_headers
             res_headers["Location"] = f"{request.base_url}/source/{source_id}/{data_id}"
+            await broadcast(jsonify({"type": "event", "event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}"}))
             return (jsonify({"success": 1, "id": f"{data_id}"}), 201, res_headers)
         except Exception as e:
             logging.error(f"  -- {str(e)}")
@@ -255,6 +258,27 @@ async def source(source_id):
     else:
         return (jsonify({"success": 0}), 200, common_headers)
 
+@app.websocket("/source/<string:source_id>")
+async def source_ws(source_id):
+    db = await get_db()
+    db.row_factory = aiosqlite.Row
+    while True:
+        body = await websocket.receive() 
+        body = json.loads(body) 
+        if not all(k in body for k in ("data",)):
+            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        if not all(k in body["data"] for k in ("value",)):
+            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        data_id = secrets.token_hex(3)
+        try:
+            await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)', (data_id, json.dumps(body, ensure_ascii="False")),)
+            await db.commit()
+            await websocket.send(jsonify({"success": 1, "id": f"{data_id}"}))
+            await broadcast(jsonify({"event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}"}))
+        except Exception as e:
+            logging.error(f"  -- {str(e)}")
+            await db.rollback()
+            await websocket.send(jsonify({"success": 0, "id": f"{data_id}"}))
 
 @app.route("/flows", methods=["GET", "POST", "OPTIONS"])
 async def flows():
@@ -316,8 +340,13 @@ async def ws_recv():
     while True:
         data = await websocket.receive()
 
+async def broadcast(message):
+    if not ws_clnt: return
+    await asyncio.gather(*[client.send(message) for client in ws_clnt], return_exceptions=True)
+
 @app.websocket("/websocket")
 async def ws():
+    ws_clnt.add(websocket._get_current_object())
     while True:
         data = await websocket.receive()
         await websocket.send(data)
