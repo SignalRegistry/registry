@@ -52,15 +52,32 @@ briefcase convert
 fi
 
 if [[ "$1" == "initialize" ]]; then
+    if [ ! -d ".venv" ] ; then
+        LOG INFO "Creating virtual environment ..."
+        if ! command -v virtualenv &> /dev/null; then
+            LOG INFO "Tool 'virtualenv' not found. Installing ..."
+            if ! command -v uv &> /dev/null; then
+                LOG INFO "Tool 'uv' not found. Installing ..."
+                if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+                    curl -LsSf https://astral.sh/uv/install.sh | sh
+                else
+                    curl -LsSf https://astral.sh/uv/install.sh | sh
+                fi
+            fi
+            uv tool install virtualenv
+        fi
+        virtualenv .venv
+    fi
     if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
         source .venv/Scripts/activate
     else
-        source .venv/bin/activate.sh
+        source .venv/bin/activate
     fi
-    exit 0
+    # exit 0
 fi
 
 if [[ "$1" == "run" ]]; then
+    uv sync
     briefcase dev --no-isolation
     exit 0
 fi
