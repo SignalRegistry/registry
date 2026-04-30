@@ -26,19 +26,42 @@ if [[ "$#" -eq 0 || "$1" == "help" ]]; then
     echo "Usage: bash $0 <command>"
     echo ""
     echo "Avaliable commands:"
+    echo "    setup      : Display commands in order to setup a similar projects"
     echo "    initialize : Check dependencies and initialize environment"
+    echo "    run        : Run development mode"
     echo "    help       : Display this help"
     echo ""
     exit 0
 fi
 
+if [[ "$1" == "setup" ]]; then
+    LOG_SECTION "Dependencies"
+    LOG WARNING "Following coomands will be only listed."
+    LOG WARNING "Run if you want to start similar project."
+    echo "
+uv tool install virtualenv
+uv init
+mkdir src/${PWD##*/}
+cp main.py src/${PWD##*/}/__main__.py
+virtualenv .venv
+source .venv/bin/activate.sh
+uv add briefcase
+briefcase convert
+"
+    exit 0
+fi
+
 if [[ "$1" == "initialize" ]]; then
-    echo "Usage: bash $0 <command>"
-    echo ""
-    echo "Avaliable commands:"
-    echo "    initialize : Check dependencies and initialize environment"
-    echo "    help       : Display this help"
-    echo ""
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        source .venv/Scripts/activate
+    else
+        source .venv/bin/activate.sh
+    fi
+    exit 0
+fi
+
+if [[ "$1" == "run" ]]; then
+    briefcase dev --no-isolation
     exit 0
 fi
 

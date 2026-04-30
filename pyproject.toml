@@ -1,23 +1,14 @@
-# This project was generated with 0.3.22 using template: https://github.com/beeware/briefcase-template@v0.3.22
-[tool.pdm]
-distribution = false
-
 [project]
 name = "registry-api"
-version = "0.1.1"
-description = "Default template for PDM package"
-authors = [
-    {name = "Hüseyin YİĞİT", email = "yigit.hsyn@gmail.com"},
-]
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
 dependencies = [
+    "aiosqlite>=0.22.1",
     "briefcase>=0.4.1",
     "quart>=0.20.0",
-    "aiosqlite>=0.22.1",
 ]
-requires-python = "==3.13.*"
-readme = "README.md"
-license = {text = "MIT"}
-
 
 
 
@@ -25,8 +16,8 @@ license = {text = "MIT"}
 # This project was generated with 0.4.1 using template: https://github.com/beeware/briefcase-template @ v0.4.1
 [tool.briefcase]
 project_name = "Registry Api"
-bundle = "com.example"
-version = "0.0.2"
+bundle = "com.signalregistry.registry-api"
+version = "0.0.1"
 url = "https://example.com/registry-api"
 license.file = "LICENSE"
 author = "Hüseyin YİĞİT"
@@ -34,7 +25,7 @@ author_email = "yigit.hsyn@gmail.com"
 
 [tool.briefcase.app.registry-api]
 formal_name = "Registry Api"
-description = "Default template for PDM package"
+description = "Add your description here"
 long_description = """More details about the app should go here.
 """
 sources = [

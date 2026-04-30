@@ -5,9 +5,21 @@
 
 ## Requirements
 - Python 3.13
+- uv (Python version manager)
 
 ## Initialization (One-Time Setup)
 ```bash
+uv tool install virtualenv
+uv init
+mkdir src/registry_api
+cp main.py src/registry_api/__main__.py
+virtualenv .venv
+source .venv/bin/activate.sh
+uv add briefcase
+briefcase convert
+```
+
+
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 sudo apt install python3-pdm  # system-wide briefcase
