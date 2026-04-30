@@ -8,13 +8,20 @@
 
 ## Initialization (One-Time Setup)
 ```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 sudo apt install python3-pdm  # system-wide briefcase
+sudo apt install python3-  # system-wide briefcase
 pdm init                      # create project
 pdm add <package>             # add dependencies  
 ```
 
 ## Building first time
 ``` bash
+virtualenv .venv
+source .venv/bin/activate.xsh
+uv sync
+
 pdm config python.use_venv true
 pdm venv create
 pdm use .venv/bin/python

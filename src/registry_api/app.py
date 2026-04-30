@@ -15,7 +15,7 @@ import asyncio
 
 app = Quart(__name__)
 app.config["DATABASE"] = f"{os.environ.get("HOST")}.db"
-app.config["DEBUG"] = True
+app.config["DEBUG"]    = True
 
 ws_clnt = set()
 
@@ -143,7 +143,6 @@ async def default():
 @app.route("/sources", methods=["GET", "POST", "OPTIONS"])
 async def sources():
     db = await get_db()
-    db.row_factory = aiosqlite.Row
     if request.method == "GET":
         cursor = await db.execute("SELECT id, date, data FROM sources where active = 1")
         rows = await cursor.fetchall()
@@ -154,7 +153,8 @@ async def sources():
             if isinstance(d.get("data"), str):
                 try:
                     d["data"] = json.loads(d["data"])
-                except:
+                except Exception as e:
+                    print(str(e))
                     pass
             result.append(d)
 
@@ -184,35 +184,20 @@ async def sources():
 @app.route("/source/<string:source_id>", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def source(source_id):
     db = await get_db()
-    db.row_factory = aiosqlite.Row
+    cursor = await db.execute("SELECT id, date, data FROM sources WHERE id = ?", (source_id,))
+    row    = await cursor.fetchone()
+    source = dict(row)
+    source["data"] = json.loads(source["data"])
     if request.method == "GET":
-        cursor = await db.execute(
-            "SELECT id, date, data FROM sources WHERE id = ?", (source_id,)
-        )
-        rows = [await cursor.fetchone()]
-
-        result = []
-        for row in rows:
-            d = dict(row)
-            if isinstance(d.get("data"), str):
-                try:
-                    d["data"] = json.loads(d["data"])
-                except Exception as e:
-                    logging.error(f"  -- {str(e)}")
-                    pass
-            result.append(d)
-        return jsonify({"success": 1, "data": result}), 200, common_headers
+        return jsonify({"success": 1, "data": [source]}), 200, common_headers
     elif request.method == "PUT":
         body = await request.get_json()
-        cursor = await db.execute("SELECT data FROM sources WHERE id = ?", (source_id,))
-        row = dict(await cursor.fetchone())
         row["data"] = json.loads(row["data"])
         for key in body.keys():
-            row["data"][key] = body[key]
+            source["data"][key] = body[key]
         try:
-            cursor = await db.execute("UPDATE sources SET data = ? WHERE id = ?", (json.dumps(row["data"], ensure_ascii=False), source_id,),)
+            cursor = await db.execute("UPDATE sources SET data = ? WHERE id = ?", (json.dumps(source["data"], ensure_ascii=False), source_id,),)
             await db.commit()
-
             res_headers = common_headers
             return (jsonify({"success": 1, "count": f"{cursor.rowcount}"}), 200, res_headers,)
         except Exception as e:
@@ -240,17 +225,10 @@ async def source(source_id):
             return {"success": 0}, 400, common_headers
     elif request.method == "DELETE":
         try:
-            cursor = await db.execute(
-                "UPDATE sources SET active = 0 WHERE id = ?", (source_id,)
-            )
+            cursor = await db.execute("UPDATE sources SET active = 0 WHERE id = ?", (source_id,))
             await db.commit()
-
             res_headers = common_headers
-            return (
-                jsonify({"success": 1, "count": f"{cursor.rowcount}"}),
-                200,
-                res_headers,
-            )
+            return (jsonify({"success": 1, "count": f"{cursor.rowcount}"}), 200, res_headers,)
         except Exception as e:
             print(str(e))
             await db.rollback()
@@ -261,7 +239,6 @@ async def source(source_id):
 @app.websocket("/source/<string:source_id>")
 async def source_ws(source_id):
     db = await get_db()
-    db.row_factory = aiosqlite.Row
     while True:
         body = await websocket.receive() 
         body = json.loads(body) 
@@ -283,7 +260,6 @@ async def source_ws(source_id):
 @app.route("/flows", methods=["GET", "POST", "OPTIONS"])
 async def flows():
     db = await get_db()
-    db.row_factory = aiosqlite.Row
     if request.method == "GET":
         args = request.args.to_dict()
 
@@ -303,7 +279,8 @@ async def flows():
             if isinstance(d.get("data"), str):
                 try:
                     d["data"] = json.loads(d["data"])
-                except:
+                except Exception as e:
+                    print(str(e))
                     pass
             result.append(d)
 
@@ -339,9 +316,11 @@ async def ws_send():
 async def ws_recv():
     while True:
         data = await websocket.receive()
+        print(data)
 
 async def broadcast(message):
-    if not ws_clnt: return
+    if not ws_clnt: 
+        return
     await asyncio.gather(*[client.send(message) for client in ws_clnt], return_exceptions=True)
 
 @app.websocket("/websocket")

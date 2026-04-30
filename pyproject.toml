@@ -9,7 +9,11 @@ description = "Default template for PDM package"
 authors = [
     {name = "Hüseyin YİĞİT", email = "yigit.hsyn@gmail.com"},
 ]
-dependencies = ["briefcase>=0.4.1", "quart>=0.20.0", "aiosqlite>=0.22.1"]
+dependencies = [
+    "briefcase>=0.4.1",
+    "quart>=0.20.0",
+    "aiosqlite>=0.22.1",
+]
 requires-python = "==3.13.*"
 readme = "README.md"
 license = {text = "MIT"}
