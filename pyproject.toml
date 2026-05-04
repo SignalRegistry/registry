@@ -17,7 +17,7 @@ dependencies = [
 [tool.briefcase]
 project_name = "Registry Api"
 bundle = "com.signalregistry.registry-api"
-version = "0.0.1"
+version = "0.1.0"
 url = "https://example.com/registry-api"
 license.file = "LICENSE"
 author = "Hüseyin YİĞİT"
