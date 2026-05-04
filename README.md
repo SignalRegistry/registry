@@ -6,6 +6,8 @@
 ## Requirements
 - Python 3.13
 - uv (Python version manager)
+- jq (for JSON processing in shell)
+- websocat (for testing WebSocket connections)
 
 ## Initialization (One-Time Setup)
 ```bash

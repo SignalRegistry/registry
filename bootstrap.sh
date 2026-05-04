@@ -22,6 +22,9 @@ LOG () {
   echo "[$1] "${@:2}""
 }
 
+DEFAULT_HOST="a1b2c3"
+DEFAULT_PORT=7000
+
 if [[ "$#" -eq 0 || "$1" == "help" ]]; then
     echo "Usage: bash $0 <command>"
     echo ""
@@ -78,9 +81,91 @@ fi
 
 if [[ "$1" == "run" ]]; then
     uv sync
-    briefcase dev --no-isolation
+    mkdir -p .data
+    export DATA_FOLDER=$PWD/.data
+    briefcase dev --no-isolation -- --host $DEFAULT_HOST --port $DEFAULT_PORT
     exit 0
 fi
+
+if [[ "$1" == "test" ]]; then
+    if [[ "$#" -eq 1 || "$2" == "help" ]]; then
+        echo "Usage: bash $0 $1 <command>"
+        echo ""
+        echo "Avaliable commands:"
+        echo "    sources  : Operation on 'sources' table"
+        # echo "    monitors : List monitors"
+        # echo "    triggers : List triggers"
+        echo "    source   : Operations on single <source> item"
+        echo "    help     : Display this help"
+        echo ""
+    elif [[ "$#" -eq 3 && "$3" == "help" ]]; then
+        bash $0 $1 $2
+    elif [[ "$2" == "sources" ]]; then
+        if [[ "$#" -eq 2 ]]; then
+            echo "Usage: bash $0 $1 $2 <command>"
+            echo ""
+            echo "Avaliable commands:"
+            echo "    get  : List sources"
+            echo "    post : Add source"
+            echo "    help : Display this help"
+            echo ""
+        elif [[ "$#" -eq 3 ]]; then
+            if [[ "$3" == "get" ]]; then
+                LOG INFO "Getting sources ..."
+                curl -s http://127.0.0.1:$DEFAULT_PORT/sources | jq .
+            elif [[ "$3" == "post" ]]; then
+                LOG INFO "Adding source ..."
+                curl -X POST -H "Content-Type: application/json" -d '{"name": "Source", "type": "pulse"}' http://127.0.0.1:$DEFAULT_PORT/sources
+            else
+                bash $0 $1 $2
+            fi
+        else
+            bash $0 $1 $2
+        fi
+    elif [[ "$2" == "source" ]]; then
+        if [[ "$#" -lt 4 ]]; then
+            echo "Usage: bash $0 $1 $2 <source_id> <command>"
+            echo ""
+            echo "Avaliable commands:"
+            echo "    get  : Get source details"
+            echo "    post : Add data to source"
+            echo "    put  : Update source"
+            echo "    del  : Delete source"
+            echo "    help : Display this help"
+            echo ""
+        else
+            if [[ "$4" == "get" ]]; then
+                LOG INFO "Getting source '$3' details ..."
+                curl -s http://127.0.0.1:$DEFAULT_PORT/source/$3 | jq .
+            elif [[ "$4" == "post" ]]; then
+                LOG INFO "Adding data to source '$3' ..."
+                curl -X POST -H "Content-Type: application/json" -d '{"data": {"value": 1}}' http://127.0.0.1:$DEFAULT_PORT/source/$3
+            else
+                bash $0 $1 $2
+            fi
+        fi
+    fi
+    exit 0
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 if [ "$1" == "dependencies" ]; then
   LOG_SECTION "Dependencies"

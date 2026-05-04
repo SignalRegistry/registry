@@ -186,6 +186,8 @@ async def source(source_id):
     db = await get_db()
     cursor = await db.execute("SELECT id, date, data FROM sources WHERE id = ?", (source_id,))
     row    = await cursor.fetchone()
+    if not row:
+        return {"success": 0, "message": "SOURCE_NOT_FOUND"}, 404, common_headers
     source = dict(row)
     source["data"] = json.loads(source["data"])
     if request.method == "GET":
@@ -217,7 +219,7 @@ async def source(source_id):
             
             res_headers = common_headers
             res_headers["Location"] = f"{request.base_url}/source/{source_id}/{data_id}"
-            await broadcast(jsonify({"type": "event", "event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}"}))
+            await broadcast(json.dumps({"type": "event", "event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}", "data": body["data"]}, ensure_ascii=False))
             return (jsonify({"success": 1, "id": f"{data_id}"}), 201, res_headers)
         except Exception as e:
             logging.error(f"  -- {str(e)}")
@@ -241,7 +243,14 @@ async def source_ws(source_id):
     db = await get_db()
     while True:
         body = await websocket.receive() 
-        body = json.loads(body) 
+        try:
+            body = json.loads(body) 
+        except json.JSONDecodeError:
+            await websocket.send(json.dumps({"success": 0, "message": "INVALID_JSON"}))
+            continue
+        if not isinstance(body, dict):
+            await websocket.send(json.dumps({"success": 0, "message": "INVALID_DATA_TYPE"}))
+            continue
         if not all(k in body for k in ("data",)):
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         if not all(k in body["data"] for k in ("value",)):
@@ -250,12 +259,13 @@ async def source_ws(source_id):
         try:
             await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)', (data_id, json.dumps(body, ensure_ascii="False")),)
             await db.commit()
-            await websocket.send(jsonify({"success": 1, "id": f"{data_id}"}))
-            await broadcast(jsonify({"event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}"}))
+            await websocket.send(json.dumps({"success": 1, "id": f"{data_id}"}))
+            await broadcast(json.dumps({"type": "event", "event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}", "data": body["data"]}, ensure_ascii=False))
         except Exception as e:
             logging.error(f"  -- {str(e)}")
             await db.rollback()
-            await websocket.send(jsonify({"success": 0, "id": f"{data_id}"}))
+            await websocket.send(json.dumps({"success": 0, "id": f"{data_id}"}))
+
 
 @app.route("/flows", methods=["GET", "POST", "OPTIONS"])
 async def flows():
