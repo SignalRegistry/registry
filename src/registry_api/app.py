@@ -246,7 +246,7 @@ async def source(source_id):
     else:
         return (jsonify({"success": 0}), 200, common_headers)
     
-@app.route("/source/<string:source_id>/data", methods=["GET"])
+@app.route("/source/<string:source_id>/data", methods=["GET", "OPTIONS"])
 async def source_data(source_id):
     db = await get_db()
     cursor = await db.execute(f'SELECT id, date, data FROM "source-{source_id}";',)
