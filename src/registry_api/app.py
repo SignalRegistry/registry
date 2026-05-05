@@ -11,11 +11,10 @@ import secrets
 import argparse
 import logging
 from logging.handlers import RotatingFileHandler
+from python_sqlite_log_handler import SQLiteLogHandler
 import asyncio
 
 app = Quart(__name__)
-app.config["DATABASE"] = f"{os.environ.get("HOST")}.db"
-app.config["DEBUG"]    = True
 
 ws_clnt = set()
 
@@ -26,10 +25,8 @@ async def get_db():
     if "db" not in g:
         g.db = await aiosqlite.connect(f"{os.environ.get("DATABASE")}")
         g.db.row_factory = aiosqlite.Row
-
         # WAL mode for better concurrency
         await g.db.execute("PRAGMA journal_mode=WAL;")
-
     return g.db
 
 
@@ -47,52 +44,20 @@ async def init_db():
     async with aiosqlite.connect(f"{os.environ.get("DATABASE")}") as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA journal_mode=WAL;")
-
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS sources (
-                no INTEGER PRIMARY KEY, 
-                active INTEGER NOT NULL DEFAULT 1,
-                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                id TEXT UNIQUE NOT NULL, 
-                data TEXT NOT NULL
-            )
-            """
-        )
-        await db.commit()
-
-        await db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS flows (
-                no INTEGER PRIMARY KEY, 
-                active INTEGER NOT NULL DEFAULT 1,
-                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                id TEXT UNIQUE NOT NULL, 
-                data TEXT NOT NULL
-            )
-            """
-        )
+        await db.execute("CREATE TABLE IF NOT EXISTS sources(no INTEGER PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id TEXT UNIQUE NOT NULL, data TEXT NOT NULL)")
+        await db.execute("CREATE TABLE IF NOT EXISTS flows(no INTEGER PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id TEXT UNIQUE NOT NULL, data TEXT NOT NULL)")
         await db.commit()
 
         # create source tables
-        logging.info("- Creating source tables ...")
+        print("Creating source tables ...")
+        app.logger.info("Creating source tables ...")
         cursor = await db.execute("SELECT id FROM sources;")
         rows = await cursor.fetchall()
         for row in rows:
             source = dict(row)
             logging.info(f"  -- {source['id']}")
-            await db.execute(
-                f"""
-                CREATE TABLE IF NOT EXISTS "source-{source['id']}" (
-                    no INTEGER PRIMARY KEY, 
-                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    id TEXT UNIQUE NOT NULL, 
-                    data TEXT NOT NULL
-                )
-                """
-            )
-            await db.commit()
-
+            await db.execute(f'CREATE TABLE IF NOT EXISTS """source-{source["id"]}""" (no INTEGER PRIMARY KEY, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id TEXT UNIQUE NOT NULL, data TEXT NOT NULL)')
+        await db.commit()
 
 @app.before_serving
 async def startup():
@@ -376,6 +341,8 @@ def main():
     DATA_FOLDER = os.environ.get("DATA_FOLDER")
     if not DATA_FOLDER:
         raise RuntimeError("'DATA_FOLDER' must be set as environment variable.")
+
+    
     
     parser = argparse.ArgumentParser(
         prog="registry-api", description="Registry API for storing sources and flows"
@@ -389,22 +356,31 @@ def main():
         print(str(e))
         exit()
     os.environ["HOST"] = args.host[0]
-    os.environ["DATABASE"] = os.path.join(DATA_FOLDER, f"{os.environ.get('HOST')}.db")
     os.environ["PORT"] = args.port[0]
+    os.environ["DATABASE"] = os.path.join(DATA_FOLDER, f"{os.environ.get('HOST')}.db")
 
-    log_hndl_cnsl = logging.StreamHandler(sys.stdout)
-    log_hndl_rota = RotatingFileHandler(filename=os.environ.get("DATABASE").replace(".db",".log"), maxBytes=1024*1024, backupCount=3)
-    logging.basicConfig(
-        encoding='utf-8', format='%(asctime)s %(levelname)s: %(message)s', 
-        level=logging.INFO,
-        handlers= [log_hndl_cnsl, log_hndl_rota]          
-    )
-    
-    
-    app.run(port=int(os.environ["PORT"]), debug=True)
-    # Your app logic goes here
-    # print("Hello, World.")
+    print(os.environ["DATABASE"])
 
+
+    logger = app.logger
+    logger.setLevel(logging.DEBUG)
+
+    logger_console = logging.StreamHandler(sys.stdout)
+    logger_sqlite  = SQLiteLogHandler(db_path=os.environ["DATABASE"], table_name="logs")
+
+    logger_console.setLevel(logging.INFO)
+    logger_sqlite.setLevel(logging.DEBUG)
+
+    logger.addHandler(logger_console)
+    logger.addHandler(logger_sqlite)
+
+    # Log some messages
+    logger.debug("This is a debug message")
+    logger.info("This is an info message")
+    logger.warning("This is a warning message")
+    logger.error("An error occurred", exc_info=True)
+
+    app.run(port=int(os.environ["PORT"]), debug=True, name=f"registry_api-{os.environ.get('HOST')}")
 
 if __name__ == "__main__":
 
