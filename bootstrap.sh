@@ -1,5 +1,14 @@
 #!/usr/bin/bash
 
+if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    source .venv/Scripts/activate
+elif [[ "$OSTYPE" == "linux-gnu" ]]; then
+    source .venv/bin/activate
+else
+    echo "Unsupported operating system"
+    exit 1
+fi
+
 LOG_SECTION () {
   printf '=%.0s' {1..80}; printf '\n'
   echo "$*"
@@ -12,15 +21,22 @@ LOG_SUBSECTION () {
   printf -- '-%.0s' {1..80}; printf '\n'
 }
 
-LOG () {
-  # LOG_LEVEL="INFO"
-  # if [ $# -gt 1 ]; then
-  #   LOG_LEVEL=$1
-  # else
-  #   LOG_LEVEL="INFO"
-  # fi
-  echo "[$1] "${@:2}""
+LOG() {
+  local level="$1"
+  shift
+
+  if [[ "$1" == "-n" ]]; then
+    shift
+    echo -n "[$level] $*"
+  elif [[ "$1" == "-p" ]]; then
+    shift
+    echo "$*"
+  else
+    echo "[$level] $*"
+  fi
 }
+
+
 
 DEFAULT_HOST="a1b2c3"
 DEFAULT_PORT=7000
@@ -55,34 +71,60 @@ briefcase convert
 fi
 
 if [[ "$1" == "initialize" ]]; then
-    if [ ! -d ".venv" ] ; then
-        LOG INFO "Creating virtual environment ..."
-        if ! command -v virtualenv &> /dev/null; then
-            LOG INFO "Tool 'virtualenv' not found. Installing ..."
-            if ! command -v uv &> /dev/null; then
-                LOG INFO "Tool 'uv' not found. Installing ..."
-                if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-                    curl -LsSf https://astral.sh/uv/install.sh | sh
-                else
-                    curl -LsSf https://astral.sh/uv/install.sh | sh
-                fi
-            fi
-            uv tool install virtualenv
-        fi
-        virtualenv .venv
+    LOG_SECTION "Initialization"
+    LOG INFO "Checking required tools ..."
+    LOG INFO -n " - 'uv': "
+    if ! command -v uv &> /dev/null; then
+        LOG INFO -p "not found, installing ... "
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        LOG INFO -p "completed."
+    else
+        LOG INFO -p "found in '$(command -v uv)'."   
     fi
+    LOG INFO -n " - 'virtualenv': "
+    if ! command -v virtualenv &> /dev/null; then
+        LOG INFO -p "not found, installing ... "
+        uv tool install virtualenv
+        LOG INFO -p "completed."
+    fi
+    LOG INFO -p "found in '$(command -v virtualenv)'."   
+
+    LOG INFO "Checking virtual environment ..."
+    if [ ! -d ".venv" ] ; then
+        LOG INFO "- Creating virtual environment ..."
+        virtualenv .venv
+    else
+        LOG INFO " - Virtual environment exists in '.venv' directory."
+    fi
+
+    LOG INFO "Activating virtual environment ..."
     if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
         source .venv/Scripts/activate
-    else
+    else # [[ "$OSTYPE" == "linux-gnu" ]]
         source .venv/bin/activate
     fi
-    # exit 0
+
+    LOG INFO "Installing dependencies ..."
+    uv sync
 fi
 
-if [[ "$1" == "run" ]]; then
-    uv sync
+if [[ "$1" == "dev" ]]; then
+    LOG_SECTION "Development Mode"
+
+    LOG_SUBSECTION "Preparation"
+    
+    LOG INFO "Folders : "
     mkdir -p .data
+    LOG INFO " - '.data' folder created in '$(pwd)/.data'"
+
+    LOG INFO "Environment variables : "
     export DATA_FOLDER=$PWD/.data
+    LOG INFO " - 'DATA_FOLDER' as '$DATA_FOLDER'"
+
+    LOG_SUBSECTION "Running"
+    LOG INFO "Starting development server ..."
+    LOG INFO " - Host : $DEFAULT_HOST"
+    LOG INFO " - Port : $DEFAULT_PORT"
     briefcase dev --no-isolation -- --host $DEFAULT_HOST --port $DEFAULT_PORT
     exit 0
 fi
