@@ -140,6 +140,9 @@ if [[ "$1" == "test" ]]; then
             elif [[ "$4" == "post" ]]; then
                 LOG INFO "Adding data to source '$3' ..."
                 curl -X POST -H "Content-Type: application/json" -d '{"data": {"value": 1}}' http://127.0.0.1:$DEFAULT_PORT/source/$3
+            elif [[ "$4" == "data" ]]; then
+                LOG INFO "Getting data from source '$3' ..."
+                curl -s http://127.0.0.1:$DEFAULT_PORT/source/$3/data | jq .
             else
                 bash $0 $1 $2
             fi

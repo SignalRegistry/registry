@@ -165,9 +165,17 @@ async def sources():
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         id = secrets.token_hex(3)
         try:
-            await db.execute(
-                "INSERT INTO sources(id, data) VALUES(?,?)",
-                (id, json.dumps(body, ensure_ascii="False")),
+            await db.execute("INSERT INTO sources(id, data) VALUES(?,?)", (id, json.dumps(body, ensure_ascii="False")),)
+            await db.commit()
+
+            await db.execute(f"""
+                CREATE TABLE IF NOT EXISTS "source-{id}" (
+                    no INTEGER PRIMARY KEY, 
+                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    id TEXT UNIQUE NOT NULL, 
+                    data TEXT NOT NULL
+                )
+                """
             )
             await db.commit()
 
@@ -237,6 +245,25 @@ async def source(source_id):
             return {"success": 0}, 400, common_headers
     else:
         return (jsonify({"success": 0}), 200, common_headers)
+    
+@app.route("/source/<string:source_id>/data", methods=["GET"])
+async def source_data(source_id):
+    db = await get_db()
+    cursor = await db.execute(f'SELECT id, date, data FROM "source-{source_id}";',)
+    rows = await cursor.fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        if isinstance(d.get("data"), str):
+            try:
+                d["data"] = json.loads(d["data"])
+                d["data"] = d["data"]["data"]
+            except Exception as e:
+                print(str(e))
+                pass
+        result.append(d)
+
+    return jsonify({"success": 1, "data": result}), 200, common_headers
 
 @app.websocket("/source/<string:source_id>")
 async def source_ws(source_id):
