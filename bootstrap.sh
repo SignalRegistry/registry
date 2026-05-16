@@ -173,6 +173,7 @@ if [[ "$1" == "test" ]]; then
             echo "    post : Add data to source"
             echo "    put  : Update source"
             echo "    del  : Delete source"
+            echo "    data : Get source datas"
             echo "    help : Display this help"
             echo ""
         else
@@ -181,7 +182,7 @@ if [[ "$1" == "test" ]]; then
                 curl -s http://127.0.0.1:$DEFAULT_PORT/source/$3 | jq .
             elif [[ "$4" == "post" ]]; then
                 LOG INFO "Adding data to source '$3' ..."
-                curl -X POST -H "Content-Type: application/json" -d '{"data": {"value": 1}}' http://127.0.0.1:$DEFAULT_PORT/source/$3
+                curl -X POST -H "Content-Type: application/json" -d '{"value": 1}' http://127.0.0.1:$DEFAULT_PORT/source/$3
             elif [[ "$4" == "data" ]]; then
                 LOG INFO "Getting data from source '$3' ..."
                 curl -s http://127.0.0.1:$DEFAULT_PORT/source/$3/data | jq .

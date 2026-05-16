@@ -10,20 +10,21 @@ import json
 import secrets
 import argparse
 import logging
-from logging.handlers import RotatingFileHandler
 from python_sqlite_log_handler import SQLiteLogHandler
 import asyncio
+from jsonschema import validate, ValidationError
 
 app = Quart(__name__)
 
 ws_clnt = set()
+
 
 # ------------------------------------------------------------------------------
 # Database Helpers
 # ------------------------------------------------------------------------------
 async def get_db():
     if "db" not in g:
-        g.db = await aiosqlite.connect(f"{os.environ.get("DATABASE")}")
+        g.db = await aiosqlite.connect(f"{os.environ.get('DATABASE')}")
         g.db.row_factory = aiosqlite.Row
         # WAL mode for better concurrency
         await g.db.execute("PRAGMA journal_mode=WAL;")
@@ -41,11 +42,27 @@ async def close_db(exception):
 # Database Initialization
 # ------------------------------------------------------------------------------
 async def init_db():
-    async with aiosqlite.connect(f"{os.environ.get("DATABASE")}") as db:
+    async with aiosqlite.connect(f"{os.environ.get('DATABASE')}") as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA journal_mode=WAL;")
-        await db.execute("CREATE TABLE IF NOT EXISTS sources(no INTEGER PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id TEXT UNIQUE NOT NULL, data TEXT NOT NULL)")
-        await db.execute("CREATE TABLE IF NOT EXISTS flows(no INTEGER PRIMARY KEY, active INTEGER NOT NULL DEFAULT 1, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id TEXT UNIQUE NOT NULL, data TEXT NOT NULL)")
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS sources(
+            no INTEGER PRIMARY KEY, 
+            active INTEGER NOT NULL DEFAULT 1, 
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+            id TEXT UNIQUE NOT NULL, 
+            data TEXT NOT NULL
+            )"""
+        )
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS flows(
+            no INTEGER PRIMARY KEY, 
+            active INTEGER NOT NULL DEFAULT 1, 
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+            id TEXT UNIQUE NOT NULL, 
+            data TEXT NOT NULL
+            )"""
+        )
         await db.commit()
 
         # create source tables
@@ -56,8 +73,17 @@ async def init_db():
         for row in rows:
             source = dict(row)
             app.logger.info(f"  -- {source['id']}")
-            await db.execute(f"""CREATE TABLE IF NOT EXISTS 'source-{source["id"]}' (no INTEGER PRIMARY KEY, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id TEXT UNIQUE NOT NULL, data TEXT NOT NULL)""")
+            await db.execute(f"""CREATE TABLE IF NOT EXISTS 'source-{source["id"]}'(
+                             no INTEGER PRIMARY KEY, 
+                             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+                             id TEXT UNIQUE NOT NULL, 
+                             ip TEXT, 
+                             location TEXT, 
+                             size INTEGER, 
+                             value TEXT NOT NULL
+                             )""")
         await db.commit()
+
 
 @app.before_serving
 async def startup():
@@ -69,6 +95,28 @@ common_headers = {
     "Access-Control-Allow-Headers": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 }
+
+
+# ------------------------------------------------------------------------------
+# Middlewares
+# ------------------------------------------------------------------------------
+@app.before_request
+async def before():
+    request.headers["Session-Userid"] = "guest"
+    request.headers["Session-Username"] = "guest"
+    request.headers["Session-Role"] = "guest"
+
+    real_ip = None or request.headers.get("CF-Connecting-IP")
+    real_ip = real_ip or request.headers.get("X-Real-IP")
+    real_ip = real_ip or request.headers.get("X-Forwarded-For")
+
+    request.headers["Ip"] = (
+        real_ip.split(",")[0].strip() if real_ip else request.remote_addr
+    )
+    if not request.headers.get("Origin"):
+        request.headers["Origin"] = request.headers["Ip"]
+
+    app.logger.info(f"Request coming from {request.headers['Ip']}")
 
 
 # ------------------------------------------------------------------------------
@@ -130,18 +178,22 @@ async def sources():
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         id = secrets.token_hex(3)
         try:
-            await db.execute("INSERT INTO sources(id, data) VALUES(?,?)", (id, json.dumps(body, ensure_ascii="False")),)
+            await db.execute(
+                "INSERT INTO sources(id, data) VALUES(?,?)",
+                (id, json.dumps(body, ensure_ascii="False")),
+            )
             await db.commit()
 
             await db.execute(f"""
-                CREATE TABLE IF NOT EXISTS "source-{id}" (
-                    no INTEGER PRIMARY KEY, 
-                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    id TEXT UNIQUE NOT NULL, 
-                    data TEXT NOT NULL
-                )
-                """
-            )
+                CREATE TABLE IF NOT EXISTS "source-{id}"(
+                no INTEGER PRIMARY KEY, 
+                date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                id TEXT UNIQUE NOT NULL, 
+                ip TEXT,
+                location TEXT, 
+                size INTEGER,
+                value TEXT NOT NULL
+                )""")
             await db.commit()
 
             res_headers = common_headers
@@ -154,13 +206,21 @@ async def sources():
         return (jsonify({"success": 0}), 200, common_headers)
 
 
-@app.route("/source/<string:source_id>", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+@app.route(
+    "/source/<string:source_id>", 
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 async def source(source_id):
     db = await get_db()
-    cursor = await db.execute("SELECT id, date, data FROM sources WHERE id = ?", (source_id,))
-    row    = await cursor.fetchone()
+    cursor = await db.execute(
+        "SELECT id, date, data FROM sources WHERE id = ?", 
+        (source_id,)
+    )
+    row = await cursor.fetchone()
     if not row:
-        return {"success": 0, "message": "SOURCE_NOT_FOUND"}, 404, common_headers
+        return ({"success": 0, "message": "SOURCE_NOT_FOUND"}, 
+                404, 
+                common_headers)
     source = dict(row)
     source["data"] = json.loads(source["data"])
     if request.method == "GET":
@@ -171,77 +231,132 @@ async def source(source_id):
         for key in body.keys():
             source["data"][key] = body[key]
         try:
-            cursor = await db.execute("UPDATE sources SET data = ? WHERE id = ?", (json.dumps(source["data"], ensure_ascii=False), source_id,),)
+            cursor = await db.execute(
+                "UPDATE sources SET data = ? WHERE id = ?",
+                (
+                    json.dumps(source["data"], ensure_ascii=False),
+                    source_id,
+                ),
+            )
             await db.commit()
             res_headers = common_headers
-            return (jsonify({"success": 1, "count": f"{cursor.rowcount}"}), 200, res_headers,)
+            return (
+                jsonify({"success": 1, "count": f"{cursor.rowcount}"}),
+                200,
+                res_headers,
+            )
         except Exception as e:
             print(str(e))
             await db.rollback()
             return {"success": 0}, 400, common_headers
     elif request.method == "POST":
-        body = await request.get_json() 
-        if not all(k in body for k in ("data",)):
-            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        if not all(k in body["data"] for k in ("value",)):
-            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        data_id = secrets.token_hex(3)
+        body = await request.get_json()
+        print(body)
+        schema = {
+            "type": "object",
+            "properties": {
+                "value"    : {"type": "string"},
+                "location" : {"type": "string"}
+            },
+            "required": ["value"],
+            "additionalProperties": False
+        }
+        if source["data"]["type"] == "pulse":
+            schema["properties"]["value"]["type"] = "number"
+
         try:
-            await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)', (data_id, json.dumps(body, ensure_ascii="False")),)
+            validate(instance=body, schema=schema)
+        except ValidationError as e:
+            logging.error(f"  -- {str(e)}")
+            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
+        data = body
+        data["id"]       = secrets.token_hex(3)
+        data["ip"]       = request.headers["Ip"]
+        if "location" not in data:
+            data["location"] = "0,0" 
+        data["size"] = sys.getsizeof(data["value"]) 
+        try:
+            await db.execute(
+                f"""INSERT INTO "source-{source_id}"(id, ip, location, size, value) 
+                VALUES(?,?,?,?,?)""",
+                (data["id"], data["ip"], data["location"], data["size"], 
+                 json.dumps(data["value"], ensure_ascii="False")),
+            )
             await db.commit()
-            
+
             res_headers = common_headers
-            res_headers["Location"] = f"{request.base_url}/source/{source_id}/{data_id}"
-            await broadcast(json.dumps({"type": "event", "event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}", "data": body["data"]}, ensure_ascii=False))
-            return (jsonify({"success": 1, "id": f"{data_id}"}), 201, res_headers)
+            res_headers["Location"] = f"{request.base_url}/source/{source_id}/{data['id']}"
+            await broadcast(
+                json.dumps(
+                    {
+                        "type": "event",
+                        "event": "SOURCE_DATA_INSERT",
+                        "source_id": f"{source_id}",
+                        "data_id"    : data["id"],
+                        "data_value" : data["value"],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return (jsonify({"success": 1, "id": data["id"]}), 201, res_headers)
         except Exception as e:
             logging.error(f"  -- {str(e)}")
             await db.rollback()
             return {"success": 0}, 400, common_headers
     elif request.method == "DELETE":
         try:
-            cursor = await db.execute("UPDATE sources SET active = 0 WHERE id = ?", (source_id,))
+            cursor = await db.execute(
+                "UPDATE sources SET active = 0 WHERE id = ?", (source_id,)
+            )
             await db.commit()
             res_headers = common_headers
-            return (jsonify({"success": 1, "count": f"{cursor.rowcount}"}), 200, res_headers,)
+            return (
+                jsonify({"success": 1, "count": f"{cursor.rowcount}"}),
+                200,
+                res_headers,
+            )
         except Exception as e:
             print(str(e))
             await db.rollback()
             return {"success": 0}, 400, common_headers
     else:
         return (jsonify({"success": 0}), 200, common_headers)
-    
+
+
 @app.route("/source/<string:source_id>/data", methods=["GET", "OPTIONS"])
 async def source_data(source_id):
     db = await get_db()
-    cursor = await db.execute(f'SELECT id, date, data FROM "source-{source_id}";',)
+    cursor = await db.execute(
+        f'SELECT id, date, ip, location, size, value FROM "source-{source_id}";',
+    )
     rows = await cursor.fetchall()
     result = []
     for row in rows:
         d = dict(row)
-        if isinstance(d.get("data"), str):
-            try:
-                d["data"] = json.loads(d["data"])
-                d["data"] = d["data"]["data"]
-            except Exception as e:
-                print(str(e))
-                pass
+        try:
+            d["value"] = json.loads(d["value"])
+        except Exception as e:
+            app.logger.error(str(e))
+            pass
         result.append(d)
 
     return jsonify({"success": 1, "data": result}), 200, common_headers
+
 
 @app.websocket("/source/<string:source_id>")
 async def source_ws(source_id):
     db = await get_db()
     while True:
-        body = await websocket.receive() 
+        body = await websocket.receive()
         try:
-            body = json.loads(body) 
+            body = json.loads(body)
         except json.JSONDecodeError:
             await websocket.send(json.dumps({"success": 0, "message": "INVALID_JSON"}))
             continue
         if not isinstance(body, dict):
-            await websocket.send(json.dumps({"success": 0, "message": "INVALID_DATA_TYPE"}))
+            await websocket.send(
+                json.dumps({"success": 0, "message": "INVALID_DATA_TYPE"})
+            )
             continue
         if not all(k in body for k in ("data",)):
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
@@ -249,10 +364,24 @@ async def source_ws(source_id):
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         data_id = secrets.token_hex(3)
         try:
-            await db.execute(f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)', (data_id, json.dumps(body, ensure_ascii="False")),)
+            await db.execute(
+                f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)',
+                (data_id, json.dumps(body, ensure_ascii="False")),
+            )
             await db.commit()
             await websocket.send(json.dumps({"success": 1, "id": f"{data_id}"}))
-            await broadcast(json.dumps({"type": "event", "event": "SOURCE_DATA_INSERT", "source_id": f"{source_id}", "data_id": f"{data_id}", "data": body["data"]}, ensure_ascii=False))
+            await broadcast(
+                json.dumps(
+                    {
+                        "type": "event",
+                        "event": "SOURCE_DATA_INSERT",
+                        "source_id": f"{source_id}",
+                        "data_id": f"{data_id}",
+                        "data": body["data"],
+                    },
+                    ensure_ascii=False,
+                )
+            )
         except Exception as e:
             logging.error(f"  -- {str(e)}")
             await db.rollback()
@@ -311,19 +440,25 @@ async def flows():
     else:
         return (jsonify({"success": 0}), 200, common_headers)
 
+
 async def ws_send():
     while True:
         await websocket.send()
+
 
 async def ws_recv():
     while True:
         data = await websocket.receive()
         print(data)
 
+
 async def broadcast(message):
-    if not ws_clnt: 
+    if not ws_clnt:
         return
-    await asyncio.gather(*[client.send(message) for client in ws_clnt], return_exceptions=True)
+    await asyncio.gather(
+        *[client.send(message) for client in ws_clnt], return_exceptions=True
+    )
+
 
 @app.websocket("/websocket")
 async def ws():
@@ -342,13 +477,15 @@ def main():
     if not DATA_FOLDER:
         raise RuntimeError("'DATA_FOLDER' must be set as environment variable.")
 
-    
-    
     parser = argparse.ArgumentParser(
         prog="registry-api", description="Registry API for storing sources and flows"
     )
-    parser.add_argument("--host", help="hostname for database", type=str, nargs=1, required=True)
-    parser.add_argument("--port", help="listening port", type=str, nargs=1, required=True)
+    parser.add_argument(
+        "--host", help="hostname for database", type=str, nargs=1, required=True
+    )
+    parser.add_argument(
+        "--port", help="listening port", type=str, nargs=1, required=True
+    )
     try:
         args = parser.parse_args(sys.argv[1:])
     except Exception as e:
@@ -363,7 +500,7 @@ def main():
     logger.setLevel(logging.DEBUG)
 
     logger_console = logging.StreamHandler(sys.stdout)
-    logger_sqlite  = SQLiteLogHandler(db_path=os.environ["DATABASE"], table_name="logs")
+    logger_sqlite = SQLiteLogHandler(db_path=os.environ["DATABASE"], table_name="logs")
 
     logger_console.setLevel(logging.INFO)
     logger_sqlite.setLevel(logging.DEBUG)
@@ -371,14 +508,8 @@ def main():
     # logger.addHandler(logger_console)
     logger.addHandler(logger_sqlite)
 
-    # Log some messages
-    # logger.debug("This is a debug message")
-    # logger.info("This is an info message")
-    # logger.warning("This is a warning message")
-    # logger.error("An error occurred", exc_info=True)
-
     app.run(port=int(os.environ["PORT"]), debug=True)
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     main()

@@ -21,3 +21,7 @@ logs/
 
 # Temporarily data files
 .data
+
+# Editor temporary files
+*.un~
+*.swp
