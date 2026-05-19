@@ -3,7 +3,7 @@
 # Enter working directory
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
 SCRIPT_NAME=$(basename "${BASH_SOURCE[0]}")
-cd $SCRIPT_DIR  
+cd "$SCRIPT_DIR"  
 
 # Log functions
 LOG_SECTION () {
@@ -104,19 +104,21 @@ fi
 # Development
 ###############################################################################
 
-DEFAULT_HOST="a1b2c3"
+DEFAULT_HOST="http://127.0.0.1"
+DEFAULT_REGISTRY="a1b2c3"
 DEFAULT_PORT=7999
+DEFAULT_URL=$DEFAULT_HOST:$DEFAULT_PORT
 
 if [[ "$1" == "dev" ]]; then
     id0="$(xdotool getactivewindow)"
     xdotool key alt+F5
     xdotool getactivewindow windowsize 40% 40%
     xdotool windowmove $id0 60% 0%
-    source $SCRIPT_DIR/$SCRIPT_NAME initialize
+    source "$SCRIPT_DIR/$SCRIPT_NAME" initialize
     LOG_SECTION "Development Mode"
 
     LOG_SUBSECTION "Open editor"
-    xfce4-terminal -e "vim $SCRIPT_DIR/src/registry_api/app.py" && sleep .1 
+    xfce4-terminal -e "vim '$SCRIPT_DIR/src/registry_api/app.py'" && sleep .1 
     id1="$(xdotool getwindowfocus)"
     eval $(xdotool getwindowgeometry --shell $id1)
     xdotool windowsize $id1 $WIDTH 80%
@@ -139,14 +141,21 @@ if [[ "$1" == "dev" ]]; then
 
     LOG_SUBSECTION "Continous run"
     LOG INFO "Starting development server ..."
-    LOG INFO " - Host : $DEFAULT_HOST"
-    LOG INFO " - Port : $DEFAULT_PORT"
+    LOG INFO " - Host     : $DEFAULT_HOST"
+    LOG INFO " - Registry : $DEFAULT_REGISTRY"
+    LOG INFO " - Port     : $DEFAULT_PORT"
     while true
     do 
         briefcase dev --no-isolation -- --host $DEFAULT_HOST --port $DEFAULT_PORT; 
         sleep 2; 
     done
 fi
+
+###############################################################################
+# Testing
+###############################################################################
+shopt -s expand_aliases
+alias curl_post_json='curl -X POST -H "Content-Type: application/json"'
 
 if [[ "$1" == "test" ]]; then
     if [[ "$#" -eq 1 || "$2" == "help" ]]; then
@@ -173,10 +182,10 @@ if [[ "$1" == "test" ]]; then
         elif [[ "$#" -eq 3 ]]; then
             if [[ "$3" == "get" ]]; then
                 LOG INFO "Getting sources ..."
-                curl -s http://127.0.0.1:$DEFAULT_PORT/sources | jq .
+                curl -s $DEFAULT_URL/sources | jq .
             elif [[ "$3" == "post" ]]; then
                 LOG INFO "Adding source ..."
-                curl -X POST -H "Content-Type: application/json" -d '{"name": "Source", "type": "pulse"}' http://127.0.0.1:$DEFAULT_PORT/sources
+                curl -X POST -H "Content-Type: application/json" -d '{"name": "Source", "type": "pulse"}' $DEFAULT_URL/sources
             else
                 bash $0 $1 $2
             fi
@@ -198,13 +207,15 @@ if [[ "$1" == "test" ]]; then
         else
             if [[ "$4" == "get" ]]; then
                 LOG INFO "Getting source '$3' details ..."
-                curl -s http://127.0.0.1:$DEFAULT_PORT/source/$3 | jq .
+                curl -s $DEFAULT_URL/source/$3 | jq .
             elif [[ "$4" == "post" ]]; then
                 LOG INFO "Adding data to source '$3' ..."
-                curl -X POST -H "Content-Type: application/json" -d '{"value": 1}' http://127.0.0.1:$DEFAULT_PORT/source/$3
+                DATA=$(echo "{}" | jq '.value=1')
+                echo $DATA | jq '.' -c
+                curl_post_json -d "$DATA" $DEFAULT_URL/source/$3
             elif [[ "$4" == "data" ]]; then
                 LOG INFO "Getting data from source '$3' ..."
-                curl -s http://127.0.0.1:$DEFAULT_PORT/source/$3/data | jq .
+                curl -s $DEFAULT_URL/source/$3/data | jq .
             else
                 bash $0 $1 $2
             fi
