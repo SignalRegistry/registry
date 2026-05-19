@@ -251,7 +251,6 @@ async def source(source_id):
             return {"success": 0}, 400, common_headers
     elif request.method == "POST":
         body = await request.get_json()
-        print(body)
         schema = {
             "type": "object",
             "properties": {
@@ -276,12 +275,12 @@ async def source(source_id):
             data["location"] = "0,0" 
         data["size"] = sys.getsizeof(data["value"]) 
         try:
-            await db.execute(
-                f"""INSERT INTO "source-{source_id}"(id, ip, location, size, value) 
-                VALUES(?,?,?,?,?)""",
-                (data["id"], data["ip"], data["location"], data["size"], 
-                 json.dumps(data["value"], ensure_ascii="False")),
-            )
+            sql=f"INSERT INTO 'source-{source_id}'" \
+                    "(id, ip, location, size, value)" \
+                     "VALUES(?,?,?,?,?)"
+            await db.execute(sql,
+                    (data["id"], data["ip"], data["location"], data["size"],
+                     json.dumps(data["value"], ensure_ascii="False")),)
             await db.commit()
 
             res_headers = common_headers
@@ -289,11 +288,12 @@ async def source(source_id):
             await broadcast(
                 json.dumps(
                     {
-                        "type": "event",
-                        "event": "SOURCE_DATA_INSERT",
-                        "source_id": f"{source_id}",
-                        "data_id"    : data["id"],
-                        "data_value" : data["value"],
+                        "jsonrpc": "2.0",
+                        "method" : "source.data.insert",
+                        "params" : {
+                            "source_id": source_id,
+                            "data_id"  : data["id"]
+                            }
                     },
                     ensure_ascii=False,
                 )
