@@ -1,14 +1,11 @@
 #!/usr/bin/bash
 
-if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    source .venv/Scripts/activate
-elif [[ "$OSTYPE" == "linux-gnu" ]]; then
-    source .venv/bin/activate
-else
-    echo "Unsupported operating system"
-    exit 1
-fi
+# Enter working directory
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)
+SCRIPT_NAME=$(basename "${BASH_SOURCE[0]}")
+cd $SCRIPT_DIR  
 
+# Log functions
 LOG_SECTION () {
   printf '=%.0s' {1..80}; printf '\n'
   echo "$*"
@@ -35,11 +32,6 @@ LOG() {
     echo "[$level] $*"
   fi
 }
-
-
-
-DEFAULT_HOST="a1b2c3"
-DEFAULT_PORT=7000
 
 if [[ "$#" -eq 0 || "$1" == "help" ]]; then
     echo "Usage: bash $0 <command>"
@@ -108,25 +100,52 @@ if [[ "$1" == "initialize" ]]; then
     uv sync
 fi
 
+###############################################################################
+# Development
+###############################################################################
+
+DEFAULT_HOST="a1b2c3"
+DEFAULT_PORT=7999
+
 if [[ "$1" == "dev" ]]; then
+    id0="$(xdotool getactivewindow)"
+    xdotool key alt+F5
+    xdotool getactivewindow windowsize 40% 40%
+    xdotool windowmove $id0 60% 0%
+    source $SCRIPT_DIR/$SCRIPT_NAME initialize
     LOG_SECTION "Development Mode"
 
-    LOG_SUBSECTION "Preparation"
-    
-    LOG INFO "Folders : "
+    LOG_SUBSECTION "Open editor"
+    xfce4-terminal -e "vim $SCRIPT_DIR/src/registry_api/app.py" && sleep .1 
+    id1="$(xdotool getwindowfocus)"
+    eval $(xdotool getwindowgeometry --shell $id1)
+    xdotool windowsize $id1 $WIDTH 80%
+    xdotool windowmove $id1 0% 0%
+
+    LOG_SUBSECTION "Open test terminal"
+    echo "source '$SCRIPT_DIR/$SCRIPT_NAME' initialize"
+    xfce4-terminal && sleep 0.5
+    id2="$(xdotool getwindowfocus)"
+    xdotool windowsize $id2 40% 40%
+    xdotool windowmove $id2 60% 60%
+    xdotool type "source \"$SCRIPT_DIR/$SCRIPT_NAME\" initialize"
+    xdotool key Return 
+
+    LOG_SUBSECTION "Environment variables and filesystem"
     mkdir -p .data
     LOG INFO " - '.data' folder created in '$(pwd)/.data'"
-
-    LOG INFO "Environment variables : "
     export DATA_FOLDER=$PWD/.data
     LOG INFO " - 'DATA_FOLDER' as '$DATA_FOLDER'"
 
-    LOG_SUBSECTION "Running"
+    LOG_SUBSECTION "Continous run"
     LOG INFO "Starting development server ..."
     LOG INFO " - Host : $DEFAULT_HOST"
     LOG INFO " - Port : $DEFAULT_PORT"
-    briefcase dev --no-isolation -- --host $DEFAULT_HOST --port $DEFAULT_PORT
-    exit 0
+    while true
+    do 
+        briefcase dev --no-isolation -- --host $DEFAULT_HOST --port $DEFAULT_PORT; 
+        sleep 2; 
+    done
 fi
 
 if [[ "$1" == "test" ]]; then
