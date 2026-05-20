@@ -260,7 +260,7 @@ async def source(source_id):
             "required": ["value"],
             "additionalProperties": False
         }
-        if source["data"]["type"] == "pulse":
+        if source["data"]["type"] == "Pulse":
             schema["properties"]["value"]["type"] = "number"
 
         try:
