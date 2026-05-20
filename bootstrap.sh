@@ -97,7 +97,7 @@ if [[ "$1" == "initialize" ]]; then
     fi
 
     LOG INFO "Installing dependencies ..."
-    uv sync
+    uv sync --native-tls
 fi
 
 ###############################################################################
@@ -110,29 +110,50 @@ DEFAULT_PORT=7999
 DEFAULT_URL=$DEFAULT_HOST:$DEFAULT_PORT
 
 if [[ "$1" == "dev" ]]; then
-    id0="$(xdotool getactivewindow)"
-    xdotool key alt+F5
-    xdotool getactivewindow windowsize 40% 40%
-    xdotool windowmove $id0 60% 0%
-    source "$SCRIPT_DIR/$SCRIPT_NAME" initialize
     LOG_SECTION "Development Mode"
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+        echo 'id1 := WinExist("A")' > temp.ahk
+        echo 'WinActivate id1' >> temp.ahk
+        echo 'WinMove A_Screenwidth*0.6, A_ScreenHeight*0.1, A_ScreenWidth*0.3, A_ScreenHeight*0.4' >> temp.ahk
+        AutoHotkeyUX.exe temp.ahk
 
-    LOG_SUBSECTION "Open editor"
-    xfce4-terminal -e "vim '$SCRIPT_DIR/src/registry_api/app.py'" && sleep .1 
-    id1="$(xdotool getwindowfocus)"
-    eval $(xdotool getwindowgeometry --shell $id1)
-    xdotool windowsize $id1 $WIDTH 80%
-    xdotool windowmove $id1 0% 0%
+        echo 'Run "bash --login -i",,, &id1' > temp.ahk
+        echo 'WinWait "ahk_pid " id1' >> temp.ahk
+        echo 'WinActivate' >> temp.ahk
+        echo 'WinMove 0, 0, A_ScreenWidth/3, A_ScreenHeight*0.8' >> temp.ahk
+        echo "Send \"vim '$SCRIPT_DIR/src/registry_api/app.py'{Enter}\"" >> temp.ahk
+        AutoHotkeyUX.exe temp.ahk
+        
+        echo 'Run "bash --login -i",,, &id1' > temp.ahk
+        echo 'WinWait "ahk_pid " id1' >> temp.ahk
+        echo 'WinActivate' >> temp.ahk
+        echo 'WinMove A_Screenwidth*0.6, A_ScreenHeight*0.6, A_ScreenWidth*0.3, A_ScreenHeight*0.3' >> temp.ahk
+        echo "Send \"source '$SCRIPT_DIR/$SCRIPT_NAME' initialize{Enter}\"" >> temp.ahk
+        AutoHotkeyUX.exe temp.ahk
+    else # [[ "$OSTYPE" == "linux-gnu" ]]
+        id0="$(xdotool getactivewindow)"
+        xdotool key alt+F5
+        xdotool getactivewindow windowsize 40% 40%
+        xdotool windowmove $id0 60% 0%
+        source "$SCRIPT_DIR/$SCRIPT_NAME" initialize
 
-    LOG_SUBSECTION "Open test terminal"
-    echo "source '$SCRIPT_DIR/$SCRIPT_NAME' initialize"
-    xfce4-terminal && sleep 0.5
-    id2="$(xdotool getwindowfocus)"
-    xdotool windowsize $id2 40% 40%
-    xdotool windowmove $id2 60% 60%
-    xdotool type "source \"$SCRIPT_DIR/$SCRIPT_NAME\" initialize"
-    xdotool key Return 
+        LOG_SUBSECTION "Open editor"
+        xfce4-terminal -e "vim '$SCRIPT_DIR/src/registry_api/app.py'" && sleep .1 
+        id1="$(xdotool getwindowfocus)"
+        eval $(xdotool getwindowgeometry --shell $id1)
+        xdotool windowsize $id1 $WIDTH 80%
+        xdotool windowmove $id1 0% 0%
 
+        LOG_SUBSECTION "Open test terminal"
+        echo "source '$SCRIPT_DIR/$SCRIPT_NAME' initialize"
+        xfce4-terminal && sleep 0.5
+        id2="$(xdotool getwindowfocus)"
+        xdotool windowsize $id2 40% 40%
+        xdotool windowmove $id2 60% 60%
+        xdotool type "source \"$SCRIPT_DIR/$SCRIPT_NAME\" initialize"
+        xdotool key Return 
+    fi
+    
     LOG_SUBSECTION "Environment variables and filesystem"
     mkdir -p .data
     LOG INFO " - '.data' folder created in '$(pwd)/.data'"
@@ -144,9 +165,10 @@ if [[ "$1" == "dev" ]]; then
     LOG INFO " - Host     : $DEFAULT_HOST"
     LOG INFO " - Registry : $DEFAULT_REGISTRY"
     LOG INFO " - Port     : $DEFAULT_PORT"
+
     while true
     do 
-        briefcase dev --no-isolation -- --host $DEFAULT_HOST --port $DEFAULT_PORT; 
+        briefcase dev --no-isolation -- --host $DEFAULT_REGISTRY --port $DEFAULT_PORT; 
         sleep 2; 
     done
 fi
