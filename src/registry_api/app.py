@@ -112,7 +112,7 @@ async def before():
     if not request.headers.get("Origin"):
         request.headers["Origin"] = request.headers["Ip"]
 
-    app.logger.info(f"Request coming from {request.headers['Ip']}")
+    app.logger.info(f"{request.headers['Ip']}")
 
 
 # ------------------------------------------------------------------------------
@@ -212,7 +212,8 @@ async def source(source_id):
     )
     row = await cursor.fetchone()
     if not row:
-        return ({"success": 0, "message": "SOURCE_NOT_FOUND"}, 404, common_headers)
+        app.logger.debug(f"{request.headers['Ip']}: {request.path}: 1: SOURCE_NOT_FOUND")
+        return ({"success": 0, "message": f"{request.path}: 1: SOURCE_NOT_FOUND"}, 404, common_headers)
     source = dict(row)
     source["data"] = json.loads(source["data"])
     if request.method == "GET":
@@ -255,7 +256,7 @@ async def source(source_id):
         try:
             validate(instance=body, schema=schema)
         except ValidationError as e:
-            logging.error(f"  -- {str(e)}")
+            app.logger.error(f"  -- {str(e)}")
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         data = body
         data["id"] = secrets.token_hex(3)
@@ -291,7 +292,6 @@ async def source(source_id):
                         "jsonrpc": "2.0",
                         "method": "source.data.insert",
                         "params": {
-                            "succes": 1,
                             "source_id": source_id,
                             "data_id": data["id"],
                         },
@@ -301,7 +301,7 @@ async def source(source_id):
             )
             return (jsonify({"success": 1, "id": data["id"]}), 201, res_headers)
         except Exception as e:
-            logging.error(f"  -- {str(e)}")
+            app.logger.error(f"  -- {str(e)}")
             await db.rollback()
             return {"success": 0}, 400, common_headers
     elif request.method == "DELETE":
@@ -416,8 +416,8 @@ async def broadcast(message):
     )
 
 
-@app.websocket("/websocket")
-async def ws():
+@app.websocket("/rpc")
+async def rpc():
     ws_clnt.add(websocket._get_current_object())
 
     real_ip = None or websocket.headers.get("CF-Connecting-IP")
@@ -430,9 +430,31 @@ async def ws():
     if not websocket.headers.get("Origin"):
         websocket.headers["Origin"] = websocket.headers["Ip"]
 
+    app.logger.info(f"{websocket.headers['Ip']} /rpc")
+
     while True:
+        # 1: receive data from sender and parse it as JSON format
         data = await websocket.receive()
-        data = json.loads(data)
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError as e:
+            app.logger.error(f"  -- RPC: 1: JSON_PARSE_ERROR: {str(e)}")
+            await websocket.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 0,
+                        "error": {
+                            "code": -32602,
+                            "message": "RPC: 1:JSON_PARSE_ERROR",
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            continue
+
+        # 2: validate base JSON-RPC format
         schema = {
             "type": "object",
             "properties": {
@@ -441,38 +463,124 @@ async def ws():
                 "params": {"type": ["array", "object"]},
                 "id": {"type": "string"},
             },
-            "required": ["jsonrpc", "method", "params", "id"],
-            "additionalProperties": False,
+            "required": ["jsonrpc", "method"],
+            "additionalProperties": True,
         }
 
         try:
             validate(instance=data, schema=schema)
         except ValidationError as e:
-            logging.error(f"  -- {str(e)}")
+            app.logger.error(f"  -- RPC: 2: JSON_RPC_PARSE_ERROR: {str(e)}")
             await websocket.send(
                 json.dumps(
                     {
                         "jsonrpc": "2.0",
                         "id": data.get("id") or "0",
-                        "result": {"success": 0, "message": "JSON_RPC_PARSE_ERROR"},
+                        "error": {
+                            "code": -32602,
+                            "message": "RPC: 2: JSON_RPC_PARSE_ERROR",
+                        },
                     },
                     ensure_ascii=False,
                 )
             )
+            continue
 
-        if data["method"] == "source.data.insert":
 
-            # fetch source info
-            if (
-                data["params"].get("source_id") is None
-                or isinstance(data["params"]["source_id"], str) == False
+        # 3: ping-pong for connection keep-alive
+        if data["method"] == "ping":
+
+            # 3.0: validate JSON-RPC format 
+            schema = {
+                "type": "object",
+                "properties": {
+                    "jsonrpc": {"type": "string"},
+                    "method": {"type": "string"},
+                    "params": {"type": ["array", "object"]},
+                    "id": {"type": "string"},
+                },
+                "required": ["jsonrpc", "method", "id"],
+                "additionalProperties": False,
+            }
+
+            try:
+                validate(instance=data, schema=schema)
+            except ValidationError as e:
+                app.logger.error(f"  -- RPC: 3.0: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data.get("id") or "0",
+                            "error": {
+                                "code": -32602,
+                                "message": "RPC: 3.0: JSON_RPC_PARSE_ERROR",
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue 
+
+            await websocket.send(
+                 json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "result": "pong",
+                        "id": data["id"]
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        # 3: data insert to source
+        elif data["method"] == "source.data.insert":
+
+            # 3.0: validate JSON-RPC format
+            schema = {
+                "type": "object",
+                "properties": {
+                    "jsonrpc": {"type": "string"},
+                    "method": {"type": "string"},
+                    "params": {"type": ["array", "object"]},
+                    "id": {"type": "string"},
+                },
+                "required": ["jsonrpc", "method", "params", "id"],
+                "additionalProperties": False,
+            }
+
+            try:
+                validate(instance=data, schema=schema)
+            except ValidationError as e:
+                app.logger.error(f"  -- RPC: 3.0: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data.get("id") or "0",
+                            "error": {
+                                "code": -32602,
+                                "message": "RPC: 3.0: JSON_RPC_PARSE_ERROR",
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
+
+            # 3.1: fetch source info
+            if data["params"].get("source_id") is None or not isinstance(
+                data["params"]["source_id"], str
             ):
+                app.logger.error(f"  -- RPC: 3.1: {data['method']}, {data['id']}: JSON_RPC_PARSE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
                             "jsonrpc": "2.0",
                             "id": data["id"],
-                            "result": {"success": 0, "message": "MISSING_SOURCE_ID"},
+                            "error": {
+                                "code": -32602,
+                                "message": "RPC: 3.1: MISSING_SOURCE_ID",
+                            },
                         },
                         ensure_ascii=False,
                     )
@@ -486,40 +594,14 @@ async def ws():
             )
             row = await cursor.fetchone()
             if not row:
-                return (
-                    {"success": 0, "message": "SOURCE_NOT_FOUND"},
-                    404,
-                    common_headers,
-                )
-            source = dict(row)
-            source["data"] = json.loads(source["data"])
-
-            # validate data format based on source type
-            schema = {
-                "type": "object",
-                "properties": {
-                    "source_id": {"type": "string"},
-                    "value": {"type": "any"},
-                    "location": {"type": "string"},
-                },
-                "required": ["value"],
-                "additionalProperties": False,
-            }
-            if source["data"]["type"] == "Pulse":
-                schema["properties"]["value"]["type"] = "number"
-
-            try:
-                validate(instance=data["params"], schema=schema)
-            except ValidationError as e:
-                logging.error(f"  -- {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
                             "jsonrpc": "2.0",
                             "id": data["id"],
-                            "result": {
-                                "success": 0,
-                                "message": "DATA_VALIDATION_ERROR",
+                            "error": {
+                                "code": -32602,
+                                "message": "SOURCE_NOT_FOUND",
                             },
                         },
                         ensure_ascii=False,
@@ -527,6 +609,60 @@ async def ws():
                 )
                 continue
 
+            source = dict(row)
+            source["data"] = json.loads(source["data"])
+
+            # 3.2: validate data format based on source type
+            schema = {
+                "type": "object",
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "value": {"type": "any"},
+                    "location": {"type": "string"},
+                },
+                "required": ["source_id", "value"],
+                "additionalProperties": False,
+            }
+            if source["data"]["type"] == "Pulse":
+                schema["properties"]["value"] = {"const": 1}
+            
+            if data.get("params", {}) is None:
+                app.logger.error(f"  -- RPC: 3.2: {data['method']}, {data['id']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data["id"],
+                            "error": {
+                                "code": -32602,
+                                "message": "RPC: 3.2: MISSING_PARAMS",
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
+
+            try:
+                validate(instance=data["params"], schema=schema)
+            except ValidationError as e:
+                app.logger.error(f"  -- RPC: 3.2: {data['method']}, {data['id']}: DATA_VALIDATION_ERROR: {str(e)}")
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data["id"],
+                            "error": {
+                                "code": -32602,
+                                "message": "RPC: 3.2: DATA_VALIDATION_ERROR",
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
+
+            # 3.3: insert data into source table
             data["params"]["id"] = secrets.token_hex(3)
             data["params"]["ip"] = websocket.headers["Ip"]
             if "location" not in data:
@@ -550,15 +686,29 @@ async def ws():
                 )
                 await db.commit()
             except Exception as e:
-                logging.error(f"  -- {str(e)}")
+                logging.error(f"  -- RPC: 3.3: {data['method']}, {data['id']}: DATABASE_ERROR: {str(e)}")
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data["id"],
+                            "error": {
+                                "code": -32603,
+                                "message": "RPC: 3.3: DATABASE_ERROR",
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
 
+            # 3.4: respond to sender
             await websocket.send(
                 json.dumps(
                     {
                         "jsonrpc": "2.0",
                         "id": data["id"],
                         "result": {
-                            "success": 0,
                             "source_id": source["data"]["id"],
                             "data_id": data["params"]["id"],
                         },
@@ -567,13 +717,13 @@ async def ws():
                 )
             )
 
+            # 3.5: broadcast to other clients
             await broadcast(
                 json.dumps(
                     {
                         "jsonrpc": "2.0",
-                        "id": data["id"],
-                        "result": {
-                            "success": 0,
+                        "method": "source.data.insert",
+                        "params": {
                             "source_id": source["data"]["id"],
                             "data_id": data["params"]["id"],
                         },
@@ -581,12 +731,6 @@ async def ws():
                     ensure_ascii=False,
                 )
             )
-
-        await websocket.send(data)
-
-        # send = asyncio.create_task(ws_send())
-        # recv = asyncio.create_task(ws_recv())
-        # await asyncio.gather(send, recv)
 
 
 def main():

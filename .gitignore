@@ -25,3 +25,5 @@ logs/
 # Editor temporary files
 *.un~
 *.swp
+
+*.ruff_cache
