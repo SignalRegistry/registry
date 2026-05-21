@@ -45,24 +45,20 @@ async def init_db():
     async with aiosqlite.connect(f"{os.environ.get('DATABASE')}") as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA journal_mode=WAL;")
-        await db.execute(
-            """CREATE TABLE IF NOT EXISTS sources(
+        await db.execute("""CREATE TABLE IF NOT EXISTS sources(
             no INTEGER PRIMARY KEY, 
             active INTEGER NOT NULL DEFAULT 1, 
             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
             id TEXT UNIQUE NOT NULL, 
             data TEXT NOT NULL
-            )"""
-        )
-        await db.execute(
-            """CREATE TABLE IF NOT EXISTS flows(
+            )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS flows(
             no INTEGER PRIMARY KEY, 
             active INTEGER NOT NULL DEFAULT 1, 
             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
             id TEXT UNIQUE NOT NULL, 
             data TEXT NOT NULL
-            )"""
-        )
+            )""")
         await db.commit()
 
         # create source tables
@@ -207,20 +203,16 @@ async def sources():
 
 
 @app.route(
-    "/source/<string:source_id>", 
-    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    "/source/<string:source_id>", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 )
 async def source(source_id):
     db = await get_db()
     cursor = await db.execute(
-        "SELECT id, date, data FROM sources WHERE id = ?", 
-        (source_id,)
+        "SELECT id, date, data FROM sources WHERE id = ?", (source_id,)
     )
     row = await cursor.fetchone()
     if not row:
-        return ({"success": 0, "message": "SOURCE_NOT_FOUND"}, 
-                404, 
-                common_headers)
+        return ({"success": 0, "message": "SOURCE_NOT_FOUND"}, 404, common_headers)
     source = dict(row)
     source["data"] = json.loads(source["data"])
     if request.method == "GET":
@@ -253,12 +245,9 @@ async def source(source_id):
         body = await request.get_json()
         schema = {
             "type": "object",
-            "properties": {
-                "value"    : {"type": "string"},
-                "location" : {"type": "string"}
-            },
+            "properties": {"value": {"type": "string"}, "location": {"type": "string"}},
             "required": ["value"],
-            "additionalProperties": False
+            "additionalProperties": False,
         }
         if source["data"]["type"] == "Pulse":
             schema["properties"]["value"]["type"] = "number"
@@ -269,31 +258,43 @@ async def source(source_id):
             logging.error(f"  -- {str(e)}")
             return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
         data = body
-        data["id"]       = secrets.token_hex(3)
-        data["ip"]       = request.headers["Ip"]
+        data["id"] = secrets.token_hex(3)
+        data["ip"] = request.headers["Ip"]
         if "location" not in data:
-            data["location"] = "0,0" 
-        data["size"] = sys.getsizeof(data["value"]) 
+            data["location"] = "0,0"
+        data["size"] = sys.getsizeof(data["value"])
         try:
-            sql=f"INSERT INTO 'source-{source_id}'" \
-                    "(id, ip, location, size, value)" \
-                     "VALUES(?,?,?,?,?)"
-            await db.execute(sql,
-                    (data["id"], data["ip"], data["location"], data["size"],
-                     json.dumps(data["value"], ensure_ascii="False")),)
+            sql = (
+                f"INSERT INTO 'source-{source_id}'"
+                "(id, ip, location, size, value)"
+                "VALUES(?,?,?,?,?)"
+            )
+            await db.execute(
+                sql,
+                (
+                    data["id"],
+                    data["ip"],
+                    data["location"],
+                    data["size"],
+                    json.dumps(data["value"], ensure_ascii="False"),
+                ),
+            )
             await db.commit()
 
             res_headers = common_headers
-            res_headers["Location"] = f"{request.base_url}/source/{source_id}/{data['id']}"
+            res_headers["Location"] = (
+                f"{request.base_url}/source/{source_id}/{data['id']}"
+            )
             await broadcast(
                 json.dumps(
                     {
                         "jsonrpc": "2.0",
-                        "method" : "source.data.insert",
-                        "params" : {
+                        "method": "source.data.insert",
+                        "params": {
+                            "succes": 1,
                             "source_id": source_id,
-                            "data_id"  : data["id"]
-                            }
+                            "data_id": data["id"],
+                        },
                     },
                     ensure_ascii=False,
                 )
@@ -322,7 +323,7 @@ async def source(source_id):
     else:
         return (jsonify({"success": 0}), 200, common_headers)
 
- 
+
 @app.route("/source/<string:source_id>/data", methods=["GET", "OPTIONS"])
 async def source_data(source_id):
     db = await get_db()
@@ -341,51 +342,6 @@ async def source_data(source_id):
         result.append(d)
 
     return jsonify({"success": 1, "data": result}), 200, common_headers
-
-
-@app.websocket("/source/<string:source_id>")
-async def source_ws(source_id):
-    db = await get_db()
-    while True:
-        body = await websocket.receive()
-        try:
-            body = json.loads(body)
-        except json.JSONDecodeError:
-            await websocket.send(json.dumps({"success": 0, "message": "INVALID_JSON"}))
-            continue
-        if not isinstance(body, dict):
-            await websocket.send(
-                json.dumps({"success": 0, "message": "INVALID_DATA_TYPE"})
-            )
-            continue
-        if not all(k in body for k in ("data",)):
-            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        if not all(k in body["data"] for k in ("value",)):
-            return {"success": 0, "message": "MISSING_DATA_FIELD"}, 400
-        data_id = secrets.token_hex(3)
-        try:
-            await db.execute(
-                f'INSERT INTO "source-{source_id}"(id, data) VALUES(?,?)',
-                (data_id, json.dumps(body, ensure_ascii="False")),
-            )
-            await db.commit()
-            await websocket.send(json.dumps({"success": 1, "id": f"{data_id}"}))
-            await broadcast(
-                json.dumps(
-                    {
-                        "type": "event",
-                        "event": "SOURCE_DATA_INSERT",
-                        "source_id": f"{source_id}",
-                        "data_id": f"{data_id}",
-                        "data": body["data"],
-                    },
-                    ensure_ascii=False,
-                )
-            )
-        except Exception as e:
-            logging.error(f"  -- {str(e)}")
-            await db.rollback()
-            await websocket.send(json.dumps({"success": 0, "id": f"{data_id}"}))
 
 
 @app.route("/flows", methods=["GET", "POST", "OPTIONS"])
@@ -463,8 +419,169 @@ async def broadcast(message):
 @app.websocket("/websocket")
 async def ws():
     ws_clnt.add(websocket._get_current_object())
+
+    real_ip = None or websocket.headers.get("CF-Connecting-IP")
+    real_ip = real_ip or websocket.headers.get("X-Real-IP")
+    real_ip = real_ip or websocket.headers.get("X-Forwarded-For")
+
+    websocket.headers["Ip"] = (
+        real_ip.split(",")[0].strip() if real_ip else websocket.remote_addr
+    )
+    if not websocket.headers.get("Origin"):
+        websocket.headers["Origin"] = websocket.headers["Ip"]
+
     while True:
         data = await websocket.receive()
+        data = json.loads(data)
+        schema = {
+            "type": "object",
+            "properties": {
+                "jsonrpc": {"type": "string"},
+                "method": {"type": "string"},
+                "params": {"type": ["array", "object"]},
+                "id": {"type": "string"},
+            },
+            "required": ["jsonrpc", "method", "params", "id"],
+            "additionalProperties": False,
+        }
+
+        try:
+            validate(instance=data, schema=schema)
+        except ValidationError as e:
+            logging.error(f"  -- {str(e)}")
+            await websocket.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": data.get("id") or "0",
+                        "result": {"success": 0, "message": "JSON_RPC_PARSE_ERROR"},
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+        if data["method"] == "source.data.insert":
+
+            # fetch source info
+            if (
+                data["params"].get("source_id") is None
+                or isinstance(data["params"]["source_id"], str) == False
+            ):
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data["id"],
+                            "result": {"success": 0, "message": "MISSING_SOURCE_ID"},
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
+
+            db = await get_db()
+            cursor = await db.execute(
+                "SELECT id, date, data FROM sources WHERE id = ?",
+                (data["params"]["source_id"],),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return (
+                    {"success": 0, "message": "SOURCE_NOT_FOUND"},
+                    404,
+                    common_headers,
+                )
+            source = dict(row)
+            source["data"] = json.loads(source["data"])
+
+            # validate data format based on source type
+            schema = {
+                "type": "object",
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "value": {"type": "any"},
+                    "location": {"type": "string"},
+                },
+                "required": ["value"],
+                "additionalProperties": False,
+            }
+            if source["data"]["type"] == "Pulse":
+                schema["properties"]["value"]["type"] = "number"
+
+            try:
+                validate(instance=data["params"], schema=schema)
+            except ValidationError as e:
+                logging.error(f"  -- {str(e)}")
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": data["id"],
+                            "result": {
+                                "success": 0,
+                                "message": "DATA_VALIDATION_ERROR",
+                            },
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
+
+            data["params"]["id"] = secrets.token_hex(3)
+            data["params"]["ip"] = websocket.headers["Ip"]
+            if "location" not in data:
+                data["params"]["location"] = "0,0"
+            data["params"]["size"] = sys.getsizeof(data["params"]["value"])
+            try:
+                sql = (
+                    f"INSERT INTO 'source-{source['data']['id']}'"
+                    "(id, ip, location, size, value)"
+                    "VALUES(?,?,?,?,?)"
+                )
+                await db.execute(
+                    sql,
+                    (
+                        data["params"]["id"],
+                        data["params"]["ip"],
+                        data["params"]["location"],
+                        data["params"]["size"],
+                        json.dumps(data["params"]["value"], ensure_ascii=False),
+                    ),
+                )
+                await db.commit()
+            except Exception as e:
+                logging.error(f"  -- {str(e)}")
+
+            await websocket.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": data["id"],
+                        "result": {
+                            "success": 0,
+                            "source_id": source["data"]["id"],
+                            "data_id": data["params"]["id"],
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+            await broadcast(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": data["id"],
+                        "result": {
+                            "success": 0,
+                            "source_id": source["data"]["id"],
+                            "data_id": data["params"]["id"],
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
         await websocket.send(data)
 
         # send = asyncio.create_task(ws_send())
