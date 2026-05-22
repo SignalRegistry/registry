@@ -618,7 +618,7 @@ async def rpc():
                 "properties": {
                     "source_id": {"type": "string"},
                     "value": {"type": "any"},
-                    "location": {"type": "string"},
+                    "location": {"type": "object"},
                 },
                 "required": ["source_id", "value"],
                 "additionalProperties": False,
