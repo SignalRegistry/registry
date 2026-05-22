@@ -670,7 +670,7 @@ async def rpc():
             data["params"]["size"] = sys.getsizeof(data["params"]["value"])
             try:
                 sql = (
-                    f"INSERT INTO 'source-{source['data']['id']}'"
+                    f"INSERT INTO 'source-{source['id']}'"
                     "(id, ip, location, size, value)"
                     "VALUES(?,?,?,?,?)"
                 )
