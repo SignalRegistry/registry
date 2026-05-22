@@ -665,8 +665,8 @@ async def rpc():
             # 3.3: insert data into source table
             data["params"]["id"] = secrets.token_hex(3)
             data["params"]["ip"] = websocket.headers["Ip"]
-            if "location" not in data:
-                data["params"]["location"] = "0,0"
+            if not data.get("params", {}).get("location"):
+                data["params"]["location"] = {"type": "Point", "coordinates": [0, 0]}
             data["params"]["size"] = sys.getsizeof(data["params"]["value"])
             try:
                 sql = (
