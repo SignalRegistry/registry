@@ -112,7 +112,7 @@ async def before():
     if not request.headers.get("Origin"):
         request.headers["Origin"] = request.headers["Ip"]
 
-    app.logger.info(f"{request.headers['Ip']}")
+    app.logger.info(f"{request.headers['Ip']}: {request.path}: {request.method}")
 
 
 # ------------------------------------------------------------------------------
@@ -430,7 +430,7 @@ async def rpc():
     if not websocket.headers.get("Origin"):
         websocket.headers["Origin"] = websocket.headers["Ip"]
 
-    app.logger.info(f"{websocket.headers['Ip']} /rpc")
+    app.logger.info(f"RPC: {websocket.headers['Ip']}: {websocket.path}")
 
     while True:
         # 1: receive data from sender and parse it as JSON format
@@ -438,7 +438,7 @@ async def rpc():
         try:
             data = json.loads(data)
         except json.JSONDecodeError as e:
-            app.logger.error(f"  -- RPC: 1: JSON_PARSE_ERROR: {str(e)}")
+            app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: JSON_PARSE_ERROR: {str(e)}")
             await websocket.send(
                 json.dumps(
                     {
@@ -470,7 +470,7 @@ async def rpc():
         try:
             validate(instance=data, schema=schema)
         except ValidationError as e:
-            app.logger.error(f"  -- RPC: 2: JSON_RPC_PARSE_ERROR: {str(e)}")
+            app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: JSON_RPC_PARSE_ERROR: {str(e)}")
             await websocket.send(
                 json.dumps(
                     {
@@ -487,10 +487,9 @@ async def rpc():
             continue
 
 
-        # 3: ping-pong for connection keep-alive
+        # ping-pong for connection keep-alive
         if data["method"] == "ping":
-
-            # 3.0: validate JSON-RPC format 
+            # validate JSON-RPC format 
             schema = {
                 "type": "object",
                 "properties": {
@@ -506,7 +505,7 @@ async def rpc():
             try:
                 validate(instance=data, schema=schema)
             except ValidationError as e:
-                app.logger.error(f"  -- RPC: 3.0: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
@@ -551,7 +550,7 @@ async def rpc():
             try:
                 validate(instance=data, schema=schema)
             except ValidationError as e:
-                app.logger.error(f"  -- RPC: 3.0: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
@@ -571,7 +570,7 @@ async def rpc():
             if data["params"].get("source_id") is None or not isinstance(
                 data["params"]["source_id"], str
             ):
-                app.logger.error(f"  -- RPC: 3.1: {data['method']}, {data['id']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
@@ -627,7 +626,7 @@ async def rpc():
                 schema["properties"]["value"] = {"const": 1}
             
             if data.get("params", {}) is None:
-                app.logger.error(f"  -- RPC: 3.2: {data['method']}, {data['id']}: JSON_RPC_PARSE_ERROR: {str(e)}")
+                app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: {data['method']}: JSON_RPC_PARSE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
@@ -646,7 +645,7 @@ async def rpc():
             try:
                 validate(instance=data["params"], schema=schema)
             except ValidationError as e:
-                app.logger.error(f"  -- RPC: 3.2: {data['method']}, {data['id']}: DATA_VALIDATION_ERROR: {str(e)}")
+                app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: {data['method']}: DATA_VALIDATION_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
@@ -686,7 +685,7 @@ async def rpc():
                 )
                 await db.commit()
             except Exception as e:
-                app.logger.error(f"  -- RPC: 3.3: {data['method']}, {data['id']}: DATABASE_ERROR: {str(e)}")
+                app.logger.error(f"RPC: {websocket.headers['Ip']}: {websocket.path}: {data['method']}: DATABASE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
