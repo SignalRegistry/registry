@@ -686,7 +686,7 @@ async def rpc():
                 )
                 await db.commit()
             except Exception as e:
-                logging.error(f"  -- RPC: 3.3: {data['method']}, {data['id']}: DATABASE_ERROR: {str(e)}")
+                app.logger.error(f"  -- RPC: 3.3: {data['method']}, {data['id']}: DATABASE_ERROR: {str(e)}")
                 await websocket.send(
                     json.dumps(
                         {
