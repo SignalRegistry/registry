@@ -666,7 +666,7 @@ async def rpc():
             data["params"]["id"] = secrets.token_hex(3)
             data["params"]["ip"] = websocket.headers["Ip"]
             if not data.get("params", {}).get("location"):
-                data["params"]["location"] = {"type": "Point", "coordinates": [0, 0]}
+                data["params"]["location"] = json.dumps({"type": "Point", "coordinates": [0, 0]})
             data["params"]["size"] = sys.getsizeof(data["params"]["value"])
             try:
                 sql = (
