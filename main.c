@@ -51,7 +51,6 @@ static void fn(struct mg_connection *c, int ev, void *ev_data)
         if (rc != SQLITE_OK) {
             fprintf(stderr, "Prepare hatası: %s\n", sqlite3_errmsg(db));
             sqlite3_close(db);
-            return 1;
         }
 
         json_t *body = json_loads("{\"status\": 0, \"code\": \"SUCCESS\"}", 0, json_err);
