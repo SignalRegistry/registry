@@ -44,6 +44,9 @@ if [ "$1" == "dependencies" ]; then
   if [[ "$OSTYPE" == "linux-gnu" ]]; then
     gcc -c -o deps/${LIBRARY}-${LIBRARY_VERSION}/${LIBRARY}.o deps/${LIBRARY}-${LIBRARY_VERSION}/${LIBRARY}.c
     ar rcs -o lib/lib${LIBRARY}.a deps/${LIBRARY}-${LIBRARY_VERSION}/${LIBRARY}.o
+  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    cl.exe /c deps/${LIBRARY}-${LIBRARY_VERSION}/${LIBRARY}.c /Fo:deps/${LIBRARY}-${LIBRARY_VERSION}/${LIBRARY}.obj
+    lib.exe /OUT:lib/${LIBRARY}.lib deps/${LIBRARY}-${LIBRARY_VERSION}/${LIBRARY}.obj
   else
     LOG ERROR Unsupported operating system
     exit 1
@@ -65,6 +68,9 @@ if [ "$1" == "dependencies" ]; then
   if [[ "$OSTYPE" == "linux-gnu" ]]; then
     gcc -c -o deps/${LIBRARY}/${LIBRARY}.o deps/${LIBRARY}/${LIBRARY}.c
     ar rcs -o lib/lib${LIBRARY}.a deps/${LIBRARY}/${LIBRARY}.o
+  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    cl.exe /c deps/${LIBRARY}/${LIBRARY}.c /Fo:deps/${LIBRARY}/${LIBRARY}.obj
+    lib.exe /OUT:lib/${LIBRARY}.lib deps/${LIBRARY}/${LIBRARY}.obj
   else
     LOG ERROR Unsupported operating system
     exit 1
@@ -81,10 +87,19 @@ if [ "$1" == "dependencies" ]; then
   LOG INFO Extracting ...
   tar -xf deps/${LIBRARY}.tar.gz --directory deps/ 
   LOG INFO Building ...
-  cmake -S deps/${LIBRARY}-${LIBRARY_VERSION} -B deps/${LIBRARY}-${LIBRARY_VERSION}/build -DJANSSON_BUILD_DOCS=OFF -DJANSSON_WITHOUT_TESTS=ON > /dev/null 2>&1
-  cmake --build deps/${LIBRARY}-${LIBRARY_VERSION}/build --config Release > /dev/null 2>&1
-  cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/include/* include/
-  cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/lib/* lib/
+  cmake -S deps/${LIBRARY}-${LIBRARY_VERSION} -B deps/${LIBRARY}-${LIBRARY_VERSION}/build -DJANSSON_BUILD_DOCS=OFF -DJANSSON_WITHOUT_TESTS=ON
+  cmake --build deps/${LIBRARY}-${LIBRARY_VERSION}/build --config Release
+  if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/include/* include/
+    cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/lib/* lib/
+  elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/include/* include/
+    cp deps/${LIBRARY}-${LIBRARY_VERSION}/build/lib/Release/* lib/
+  else
+    LOG ERROR Unsupported operating system
+    exit 1
+  fi
+  
 
 fi 
 
