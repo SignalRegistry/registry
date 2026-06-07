@@ -1,63 +1,106 @@
-# Registry API
+# Registry App (registry-app)
 
-## Development Platform
-- Pardus 25
+Signal Registry, Registry Server
 
-## Requirements
-- Python 3.13
-- uv (Python version manager)
-- jq (for JSON processing in shell)
-- websocat (for testing WebSocket connections)
+## Dependencies
 
-## Initialization (One-Time Setup)
+- Node.js (v24): JavaScript runtime built on Chrome's V8 JavaScript engine.
+
+```
+# Download and install nvm:
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+
+# in lieu of restarting the shell
+\. "$HOME/.nvm/nvm.sh"
+
+# Download and install Node.js:
+nvm install 24
+
+# Verify the Node.js version:
+node -v # Should print "v24.16.0".
+
+# Verify npm version:
+npm -v # Should print "11.13.0".
+
+```
+
+- Quasar CLI: Command-line interface for Quasar Framework
+
+```
+# Install Quasar CLI globally:
+npm install -g @quasar/cli
+```
+
+## Initialization
+
+```
+# Iinitialize the project using Quasar CLI:
+# Be aware that this command will overwrite existing files in the current directory.
+# Thus keep a backup of your important files before running this command.
+
+npm init quasar@latest .
+
+# Add electron mode to the project:
+# If Electron download failed do the following:
+# - Manually add release files to the project into `node_modules/electron/dist`
+# - Add `path.txt` file into `node_modules/electron/dist` with the just only 'electron' text content
+
+quasar mode add electron
+
+# Install the dependencies for electron mode:
+npm install -D @electron/remote
+
+```
+
+## Install the Dependencies
+
 ```bash
-uv tool install virtualenv
-uv init
-mkdir src/registry_api
-cp main.py src/registry_api/__main__.py
-virtualenv .venv
-source .venv/bin/activate.sh
-uv add briefcase
-briefcase convert
+npm install
 ```
 
+## Start the App in Development Mode
 
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-sudo apt install python3-pdm  # system-wide briefcase
-sudo apt install python3-  # system-wide briefcase
-pdm init                      # create project
-pdm add <package>             # add dependencies  
-```
-
-## Building first time
-``` bash
-virtualenv .venv
-source .venv/bin/activate.xsh
-uv sync
-
-pdm config python.use_venv true
-pdm venv create
-pdm use .venv/bin/python
-source .venv/bin/activate
-pdm install
-briefcase convert
-```
-
-## Development
-
-Obtain truested certifcates for HTTPS
 ```bash
-sudo apt install mkcert                 # trusted certifier
-mkcert -install                         # obtain ssl certificates
-mkcert localhost 127.0.0.1 ::1
-sudo apt install libnss3-tools          # install for browsers
-mkcert -install
+# Webpage mode
+npm run dev
+
+# Electron mode
+npm run dev:electron
 ```
 
-Run with quart
+### Lint the files
+
 ```bash
-cd src/registry_api
-quart run --reload --key ../../localhost+2-key.pem --cert ../../localhost+2.pem
+npm run lint
+```
+
+### Format the files
+
+```bash
+npm run format
+```
+
+### Build the app for production
+
+```bash
+quasar build
+```
+
+### Customize the configuration
+
+See [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js).
+
+
+## Build
+
+```bash
+
+# HTML mode
+npm run build
+
+# Electron mode
+# If executable file is not generated, do the following:
+# - Manually change electron.bundler to 'builder' in `quasar.config.js` file
+npm run build:electron
 
 ```
